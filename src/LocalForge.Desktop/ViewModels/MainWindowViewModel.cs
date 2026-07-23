@@ -1,6 +1,10 @@
 ﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Net.Http;
 using System.Runtime.CompilerServices;
+using System.Text;
+using System.Windows.Threading;
 using LocalForge.Core.Interfaces;
 using LocalForge.Desktop.Commands;
 
@@ -11,11 +15,14 @@ public sealed class MainWindowViewModel :
     IDisposable
 {
     private readonly IOllamaClient _ollamaClient;
+    private readonly Stopwatch _stopwatch = new();
+    private readonly DispatcherTimer _elapsedTimer;
 
     private string? _selectedModel;
     private string _prompt = string.Empty;
     private string _response = string.Empty;
     private string _statusText = "Starting...";
+    private string _elapsedText = "00:00.0";
     private bool _isBusy;
     private CancellationTokenSource? _requestCancellation;
 
@@ -35,6 +42,18 @@ public sealed class MainWindowViewModel :
         CancelCommand = new RelayCommand(
             Cancel,
             () => IsBusy);
+
+        ClearResponseCommand = new RelayCommand(
+            ClearResponse,
+            () => !IsBusy &&
+                  !string.IsNullOrEmpty(Response));
+
+        _elapsedTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(250)
+        };
+
+        _elapsedTimer.Tick += OnElapsedTimerTick;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -46,6 +65,8 @@ public sealed class MainWindowViewModel :
     public AsyncRelayCommand SendCommand { get; }
 
     public RelayCommand CancelCommand { get; }
+
+    public RelayCommand ClearResponseCommand { get; }
 
     public string? SelectedModel
     {
@@ -74,13 +95,25 @@ public sealed class MainWindowViewModel :
     public string Response
     {
         get => _response;
-        private set => SetField(ref _response, value);
+        private set
+        {
+            if (SetField(ref _response, value))
+            {
+                ClearResponseCommand.NotifyCanExecuteChanged();
+            }
+        }
     }
 
     public string StatusText
     {
         get => _statusText;
         private set => SetField(ref _statusText, value);
+    }
+
+    public string ElapsedText
+    {
+        get => _elapsedText;
+        private set => SetField(ref _elapsedText, value);
     }
 
     public bool IsBusy
@@ -93,11 +126,16 @@ public sealed class MainWindowViewModel :
                 return;
             }
 
+            OnPropertyChanged(nameof(IsNotBusy));
+
             RefreshModelsCommand.NotifyCanExecuteChanged();
             SendCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
+            ClearResponseCommand.NotifyCanExecuteChanged();
         }
     }
+
+    public bool IsNotBusy => !IsBusy;
 
     public Task InitializeAsync()
     {
@@ -174,16 +212,30 @@ public sealed class MainWindowViewModel :
         _requestCancellation?.Dispose();
         _requestCancellation = new CancellationTokenSource();
 
+        string model = SelectedModel!;
+        string prompt = Prompt.Trim();
+
         IsBusy = true;
         Response = string.Empty;
-        StatusText = $"Generating with {SelectedModel}...";
+        ElapsedText = "00:00.0";
+        StatusText = $"Generating with {model}...";
+
+        _stopwatch.Restart();
+        _elapsedTimer.Start();
+
+        StringBuilder responseBuilder = new();
 
         try
         {
-            Response = await _ollamaClient.GenerateAsync(
-                SelectedModel!,
-                Prompt.Trim(),
-                _requestCancellation.Token);
+            await foreach (string chunk in
+                _ollamaClient.StreamGenerateAsync(
+                    model,
+                    prompt,
+                    _requestCancellation.Token))
+            {
+                responseBuilder.Append(chunk);
+                Response = responseBuilder.ToString();
+            }
 
             StatusText = "Response completed.";
         }
@@ -191,24 +243,68 @@ public sealed class MainWindowViewModel :
         {
             StatusText = "Request cancelled.";
         }
+        catch (HttpRequestException exception)
+        {
+            StatusText = "Connection to Ollama was lost.";
+            Response =
+                $"Ollama connection error:{Environment.NewLine}" +
+                exception.Message;
+        }
         catch (Exception exception)
         {
-            Response = $"Error: {exception.Message}";
             StatusText = "Generation failed.";
+            Response =
+                $"Error:{Environment.NewLine}{exception.Message}";
         }
         finally
         {
+            _stopwatch.Stop();
+            _elapsedTimer.Stop();
+            UpdateElapsedText();
+
             IsBusy = false;
+
+            _requestCancellation.Dispose();
+            _requestCancellation = null;
         }
     }
 
     private void Cancel()
     {
-        _requestCancellation?.Cancel();
+        if (_requestCancellation is null)
+        {
+            return;
+        }
+
+        StatusText = "Cancelling request...";
+        _requestCancellation.Cancel();
+    }
+
+    private void ClearResponse()
+    {
+        Response = string.Empty;
+        ElapsedText = "00:00.0";
+        StatusText = "Response cleared.";
+    }
+
+    private void OnElapsedTimerTick(
+        object? sender,
+        EventArgs e)
+    {
+        UpdateElapsedText();
+    }
+
+    private void UpdateElapsedText()
+    {
+        ElapsedText =
+            _stopwatch.Elapsed.ToString(@"mm\:ss\.f");
     }
 
     public void Dispose()
     {
+        _elapsedTimer.Stop();
+        _elapsedTimer.Tick -= OnElapsedTimerTick;
+
         _requestCancellation?.Cancel();
         _requestCancellation?.Dispose();
 
@@ -229,10 +325,17 @@ public sealed class MainWindowViewModel :
         }
 
         field = value;
-        PropertyChanged?.Invoke(
-            this,
-            new PropertyChangedEventArgs(propertyName));
+        OnPropertyChanged(propertyName);
 
         return true;
     }
+
+    private void OnPropertyChanged(
+        [CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(
+            this,
+            new PropertyChangedEventArgs(propertyName));
+    }
 }
+

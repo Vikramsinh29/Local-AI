@@ -8,7 +8,7 @@ public interface IOllamaClient
     Task<IReadOnlyList<string>> GetModelsAsync(
         CancellationToken cancellationToken = default);
 
-    Task<string> GenerateAsync(
+    IAsyncEnumerable<string> StreamGenerateAsync(
         string model,
         string prompt,
         CancellationToken cancellationToken = default);

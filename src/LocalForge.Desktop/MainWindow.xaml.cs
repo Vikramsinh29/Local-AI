@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using System.Windows.Controls;
 using LocalForge.Desktop.ViewModels;
 using LocalForge.Infrastructure.Ollama;
 
@@ -33,5 +34,15 @@ public partial class MainWindow : Window
         EventArgs e)
     {
         _viewModel.Dispose();
+    }
+
+    private void ResponseTextBox_TextChanged(
+        object sender,
+        TextChangedEventArgs e)
+    {
+        ResponseTextBox.CaretIndex =
+            ResponseTextBox.Text.Length;
+
+        ResponseTextBox.ScrollToEnd();
     }
 }

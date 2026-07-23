@@ -1,10 +1,15 @@
 ﻿using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
 using LocalForge.Core.Interfaces;
 
 namespace LocalForge.Infrastructure.Ollama;
 
 public sealed class OllamaClient : IOllamaClient, IDisposable
 {
+    private static readonly JsonSerializerOptions JsonOptions =
+        new(JsonSerializerDefaults.Web);
+
     private readonly HttpClient _httpClient;
     private readonly bool _ownsHttpClient;
 
@@ -15,7 +20,7 @@ public sealed class OllamaClient : IOllamaClient, IDisposable
         _httpClient = httpClient ?? new HttpClient
         {
             BaseAddress = new Uri("http://127.0.0.1:11434/"),
-            Timeout = TimeSpan.FromMinutes(30)
+            Timeout = Timeout.InfiniteTimeSpan
         };
 
         _httpClient.BaseAddress ??=
@@ -58,43 +63,79 @@ public sealed class OllamaClient : IOllamaClient, IDisposable
                        !string.IsNullOrWhiteSpace(model.Name))
                    .Select(model => model.Name)
                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                   .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                   .OrderBy(
+                       name => name,
+                       StringComparer.OrdinalIgnoreCase)
                    .ToArray()
                ?? [];
     }
 
-    public async Task<string> GenerateAsync(
+    public async IAsyncEnumerable<string> StreamGenerateAsync(
         string model,
         string prompt,
+        [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(model);
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
-        GenerateRequest request = new(
+        GenerateRequest body = new(
             Model: model,
             Prompt: prompt,
-            Stream: false);
+            Stream: true);
+
+        using HttpRequestMessage request =
+            new(HttpMethod.Post, "api/generate")
+            {
+                Content = JsonContent.Create(body)
+            };
 
         using HttpResponseMessage response =
-            await _httpClient.PostAsJsonAsync(
-                "api/generate",
+            await _httpClient.SendAsync(
                 request,
+                HttpCompletionOption.ResponseHeadersRead,
                 cancellationToken);
 
         response.EnsureSuccessStatusCode();
 
-        GenerateResponse? result =
-            await response.Content.ReadFromJsonAsync<GenerateResponse>(
+        await using Stream responseStream =
+            await response.Content.ReadAsStreamAsync(
                 cancellationToken);
 
-        if (result is null)
-        {
-            throw new InvalidOperationException(
-                "Ollama returned an empty response.");
-        }
+        using StreamReader reader = new(responseStream);
 
-        return result.Response ?? string.Empty;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string? line =
+                await reader.ReadLineAsync(cancellationToken);
+
+            if (line is null)
+            {
+                break;
+            }
+
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            GenerateStreamResponse? chunk =
+                JsonSerializer.Deserialize<GenerateStreamResponse>(
+                    line,
+                    JsonOptions);
+
+            if (!string.IsNullOrEmpty(chunk?.Response))
+            {
+                yield return chunk.Response;
+            }
+
+            if (chunk?.Done == true)
+            {
+                break;
+            }
+        }
     }
 
     public void Dispose()
@@ -115,5 +156,7 @@ public sealed class OllamaClient : IOllamaClient, IDisposable
         string Prompt,
         bool Stream);
 
-    private sealed record GenerateResponse(string? Response);
+    private sealed record GenerateStreamResponse(
+        string? Response,
+        bool Done);
 }

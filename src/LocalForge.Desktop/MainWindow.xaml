@@ -3,9 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="LocalForge AI"
         Width="1000"
-        Height="720"
+        Height="760"
         MinWidth="760"
-        MinHeight="560"
+        MinHeight="600"
         WindowStartupLocation="CenterScreen"
         Background="#F4F6F8">
 
@@ -14,6 +14,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="2*"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="3*"/>
             <RowDefinition Height="Auto"/>
@@ -54,7 +55,7 @@
                           MinHeight="34"
                           ItemsSource="{Binding Models}"
                           SelectedItem="{Binding SelectedModel}"
-                          IsEnabled="True"/>
+                          IsEnabled="{Binding IsNotBusy}"/>
 
                 <Button Grid.Column="2"
                         Margin="12,0,0,0"
@@ -90,23 +91,45 @@
             </Grid>
         </Border>
 
-        <StackPanel Grid.Row="3"
-                    Margin="0,14"
-                    HorizontalAlignment="Right"
-                    Orientation="Horizontal">
-            <Button MinWidth="100"
-                    Margin="0,0,10,0"
-                    Padding="18,8"
-                    Command="{Binding CancelCommand}"
-                    Content="Cancel"/>
+        <ProgressBar Grid.Row="3"
+                     Height="4"
+                     Margin="0,10,0,0"
+                     IsIndeterminate="{Binding IsBusy}"/>
 
-            <Button MinWidth="120"
-                    Padding="18,8"
-                    Command="{Binding SendCommand}"
-                    Content="Generate"/>
-        </StackPanel>
+        <Grid Grid.Row="4"
+              Margin="0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
 
-        <Border Grid.Row="4"
+            <TextBlock Grid.Column="0"
+                       VerticalAlignment="Center"
+                       Foreground="#5D6D7E"
+                       Text="{Binding ElapsedText}"/>
+
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal">
+                <Button MinWidth="100"
+                        Margin="0,0,10,0"
+                        Padding="18,8"
+                        Command="{Binding ClearResponseCommand}"
+                        Content="Clear"/>
+
+                <Button MinWidth="100"
+                        Margin="0,0,10,0"
+                        Padding="18,8"
+                        Command="{Binding CancelCommand}"
+                        Content="Cancel"/>
+
+                <Button MinWidth="120"
+                        Padding="18,8"
+                        Command="{Binding SendCommand}"
+                        Content="Generate"/>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="5"
                 Padding="16"
                 Background="White"
                 CornerRadius="8">
@@ -121,16 +144,20 @@
                            FontWeight="SemiBold"
                            Text="Response"/>
 
-                <TextBox Grid.Row="1"
+                <TextBox x:Name="ResponseTextBox"
+                         Grid.Row="1"
                          Padding="12"
                          IsReadOnly="True"
+                         AcceptsReturn="True"
+                         FontFamily="Consolas"
                          TextWrapping="Wrap"
                          VerticalScrollBarVisibility="Auto"
+                         TextChanged="ResponseTextBox_TextChanged"
                          Text="{Binding Response, Mode=OneWay}"/>
             </Grid>
         </Border>
 
-        <Border Grid.Row="5"
+        <Border Grid.Row="6"
                 Margin="0,14,0,0"
                 Padding="12,8"
                 Background="White"
@@ -140,5 +167,3 @@
         </Border>
     </Grid>
 </Window>
-
-
