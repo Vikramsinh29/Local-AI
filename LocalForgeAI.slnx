@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LocalForge.Core/LocalForge.Core.csproj" />
+    <Project Path="src/LocalForge.Desktop/LocalForge.Desktop.csproj" />
+    <Project Path="src/LocalForge.Infrastructure/LocalForge.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LocalForge.Tests/LocalForge.Tests.csproj" />
+  </Folder>
+</Solution>
