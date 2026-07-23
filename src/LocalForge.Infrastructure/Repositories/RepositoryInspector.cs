@@ -39,44 +39,48 @@ public sealed class RepositoryInspector : IRepositoryInspector
         string rootPath,
         CancellationToken cancellationToken)
     {
-        List<string> solutionFiles = [];
-        List<string> projectFiles = [];
+        List<string> solutions = [];
+        List<string> projects = [];
 
-        Stack<string> pendingDirectories = new();
-        pendingDirectories.Push(rootPath);
+        Stack<string> directories = new();
+        directories.Push(rootPath);
 
-        while (pendingDirectories.Count > 0)
+        while (directories.Count > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            string currentDirectory = pendingDirectories.Pop();
+            string currentDirectory = directories.Pop();
 
             foreach (string file in GetFilesSafely(currentDirectory))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 string extension = Path.GetExtension(file);
-                string relativePath = Path.GetRelativePath(rootPath, file);
+                string relativePath =
+                    Path.GetRelativePath(rootPath, file);
 
-                if (extension.Equals(".sln", StringComparison.OrdinalIgnoreCase) ||
-                    extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase))
+                if (extension.Equals(
+                        ".sln",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    extension.Equals(
+                        ".slnx",
+                        StringComparison.OrdinalIgnoreCase))
                 {
-                    solutionFiles.Add(relativePath);
+                    solutions.Add(relativePath);
                 }
                 else if (extension.Equals(
                              ".csproj",
                              StringComparison.OrdinalIgnoreCase))
                 {
-                    projectFiles.Add(relativePath);
+                    projects.Add(relativePath);
                 }
             }
 
             foreach (string directory in
                      GetDirectoriesSafely(currentDirectory))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                string directoryName = Path.GetFileName(directory);
+                string directoryName =
+                    Path.GetFileName(directory);
 
                 if (ExcludedDirectories.Contains(directoryName))
                 {
@@ -88,7 +92,8 @@ public sealed class RepositoryInspector : IRepositoryInspector
                     FileAttributes attributes =
                         File.GetAttributes(directory);
 
-                    if (attributes.HasFlag(FileAttributes.ReparsePoint))
+                    if (attributes.HasFlag(
+                        FileAttributes.ReparsePoint))
                     {
                         continue;
                     }
@@ -102,20 +107,20 @@ public sealed class RepositoryInspector : IRepositoryInspector
                     continue;
                 }
 
-                pendingDirectories.Push(directory);
+                directories.Push(directory);
             }
         }
 
-        solutionFiles.Sort(StringComparer.OrdinalIgnoreCase);
-        projectFiles.Sort(StringComparer.OrdinalIgnoreCase);
+        solutions.Sort(StringComparer.OrdinalIgnoreCase);
+        projects.Sort(StringComparer.OrdinalIgnoreCase);
 
         string gitPath = Path.Combine(rootPath, ".git");
 
         return new RepositoryInfo(
             rootPath,
             Directory.Exists(gitPath) || File.Exists(gitPath),
-            solutionFiles,
-            projectFiles);
+            solutions,
+            projects);
     }
 
     private static string[] GetFilesSafely(string directory)

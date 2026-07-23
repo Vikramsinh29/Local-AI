@@ -1,5 +1,5 @@
 ﻿using System.Windows;
-using System.Windows.Controls;
+using System.Windows.Input;
 using LocalForge.Desktop.Services;
 using LocalForge.Desktop.ViewModels;
 using LocalForge.Infrastructure.Ollama;
@@ -31,6 +31,7 @@ public partial class MainWindow : Window
         RoutedEventArgs e)
     {
         await _viewModel.InitializeAsync();
+        MessageInputTextBox.Focus();
     }
 
     private void MainWindow_Closed(
@@ -40,13 +41,28 @@ public partial class MainWindow : Window
         _viewModel.Dispose();
     }
 
-    private void ResponseTextBox_TextChanged(
+    private void MessageInputTextBox_PreviewKeyDown(
         object sender,
-        TextChangedEventArgs e)
+        KeyEventArgs e)
     {
-        ResponseTextBox.CaretIndex =
-            ResponseTextBox.Text.Length;
+        if (e.Key != Key.Enter ||
+            Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            return;
+        }
 
-        ResponseTextBox.ScrollToEnd();
+        if (_viewModel.SendCommand.CanExecute(null))
+        {
+            _viewModel.SendCommand.Execute(null);
+        }
+
+        e.Handled = true;
+    }
+
+    private void ConversationItems_LayoutUpdated(
+        object? sender,
+        EventArgs e)
+    {
+        ConversationScrollViewer.ScrollToEnd();
     }
 }

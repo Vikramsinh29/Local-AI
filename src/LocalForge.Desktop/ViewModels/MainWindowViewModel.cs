@@ -23,13 +23,13 @@ public sealed class MainWindowViewModel :
     private readonly DispatcherTimer _elapsedTimer;
 
     private string? _selectedModel;
-    private string _prompt = string.Empty;
-    private string _response = string.Empty;
+    private string _messageInput = string.Empty;
     private string _statusText = "Starting...";
-    private string _elapsedText = "00:00.0";
-    private string _selectedRepositoryPath = "No repository selected.";
-    private string _repositoryStatusText =
-        "Select a repository folder to inspect it.";
+    private string _elapsedText = string.Empty;
+    private string _repositoryName = "No repository";
+    private string _repositoryPath = string.Empty;
+    private string _repositorySummary =
+        "Select a repository to add project context.";
     private bool _isBusy;
     private CancellationTokenSource? _requestCancellation;
 
@@ -63,9 +63,9 @@ public sealed class MainWindowViewModel :
             Cancel,
             () => IsBusy);
 
-        ClearResponseCommand = new RelayCommand(
-            ClearResponse,
-            () => !IsBusy && !string.IsNullOrEmpty(Response));
+        NewChatCommand = new RelayCommand(
+            NewChat,
+            () => !IsBusy);
 
         _elapsedTimer = new DispatcherTimer
         {
@@ -79,6 +79,8 @@ public sealed class MainWindowViewModel :
 
     public ObservableCollection<string> Models { get; } = [];
 
+    public ObservableCollection<ChatMessageViewModel> Messages { get; } = [];
+
     public ObservableCollection<string> RepositoryItems { get; } = [];
 
     public AsyncRelayCommand RefreshModelsCommand { get; }
@@ -89,7 +91,7 @@ public sealed class MainWindowViewModel :
 
     public RelayCommand CancelCommand { get; }
 
-    public RelayCommand ClearResponseCommand { get; }
+    public RelayCommand NewChatCommand { get; }
 
     public string? SelectedModel
     {
@@ -103,26 +105,14 @@ public sealed class MainWindowViewModel :
         }
     }
 
-    public string Prompt
+    public string MessageInput
     {
-        get => _prompt;
+        get => _messageInput;
         set
         {
-            if (SetField(ref _prompt, value))
+            if (SetField(ref _messageInput, value))
             {
                 SendCommand.NotifyCanExecuteChanged();
-            }
-        }
-    }
-
-    public string Response
-    {
-        get => _response;
-        private set
-        {
-            if (SetField(ref _response, value))
-            {
-                ClearResponseCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -139,16 +129,22 @@ public sealed class MainWindowViewModel :
         private set => SetField(ref _elapsedText, value);
     }
 
-    public string SelectedRepositoryPath
+    public string RepositoryName
     {
-        get => _selectedRepositoryPath;
-        private set => SetField(ref _selectedRepositoryPath, value);
+        get => _repositoryName;
+        private set => SetField(ref _repositoryName, value);
     }
 
-    public string RepositoryStatusText
+    public string RepositoryPath
     {
-        get => _repositoryStatusText;
-        private set => SetField(ref _repositoryStatusText, value);
+        get => _repositoryPath;
+        private set => SetField(ref _repositoryPath, value);
+    }
+
+    public string RepositorySummary
+    {
+        get => _repositorySummary;
+        private set => SetField(ref _repositorySummary, value);
     }
 
     public bool IsBusy
@@ -167,22 +163,50 @@ public sealed class MainWindowViewModel :
             BrowseRepositoryCommand.NotifyCanExecuteChanged();
             SendCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
-            ClearResponseCommand.NotifyCanExecuteChanged();
+            NewChatCommand.NotifyCanExecuteChanged();
         }
     }
 
     public bool IsNotBusy => !IsBusy;
 
-    public Task InitializeAsync()
+    public async Task InitializeAsync()
     {
-        return RefreshModelsAsync();
+        AddWelcomeMessage();
+        await RefreshModelsAsync();
+    }
+
+    private void AddWelcomeMessage()
+    {
+        if (Messages.Count > 0)
+        {
+            return;
+        }
+
+        Messages.Add(
+            new ChatMessageViewModel(
+                isUser: false,
+                """
+                Welcome to LocalForge AI.
+
+                Select a repository from the sidebar or start a local conversation.
+                Your prompts and source code remain on this computer.
+                """));
+    }
+
+    private void NewChat()
+    {
+        Messages.Clear();
+        MessageInput = string.Empty;
+        ElapsedText = string.Empty;
+        StatusText = "New conversation started.";
+        AddWelcomeMessage();
     }
 
     private async Task SelectRepositoryAsync()
     {
         string? initialDirectory =
-            Directory.Exists(SelectedRepositoryPath)
-                ? SelectedRepositoryPath
+            Directory.Exists(RepositoryPath)
+                ? RepositoryPath
                 : null;
 
         string? selectedFolder =
@@ -194,48 +218,49 @@ public sealed class MainWindowViewModel :
         }
 
         IsBusy = true;
-        RepositoryStatusText = "Inspecting repository...";
+        StatusText = "Inspecting repository...";
 
         try
         {
             RepositoryInfo repository =
                 await _repositoryInspector.InspectAsync(selectedFolder);
 
-            SelectedRepositoryPath = repository.RootPath;
+            RepositoryPath = repository.RootPath;
+            RepositoryName =
+                Path.GetFileName(repository.RootPath.TrimEnd(
+                    Path.DirectorySeparatorChar,
+                    Path.AltDirectorySeparatorChar));
+
             RepositoryItems.Clear();
 
             foreach (string solution in repository.SolutionFiles)
             {
-                RepositoryItems.Add($"[Solution] {solution}");
+                RepositoryItems.Add($"Solution: {solution}");
             }
 
             foreach (string project in repository.ProjectFiles)
             {
-                RepositoryItems.Add($"[Project] {project}");
+                RepositoryItems.Add($"Project: {project}");
             }
 
-            if (RepositoryItems.Count == 0)
-            {
-                RepositoryItems.Add(
-                    "No .sln, .slnx or .csproj files found.");
-            }
-
-            string gitStatus = repository.IsGitRepository
+            string gitText = repository.IsGitRepository
                 ? "Git repository"
                 : "Not a Git repository";
 
-            RepositoryStatusText =
-                $"{gitStatus} | " +
-                $"{repository.SolutionFiles.Count} solution file(s) | " +
+            RepositorySummary =
+                $"{gitText} • " +
+                $"{repository.SolutionFiles.Count} solution file(s) • " +
                 $"{repository.ProjectFiles.Count} project file(s)";
+
+            StatusText = $"Repository selected: {RepositoryName}";
         }
         catch (Exception exception)
         {
-            SelectedRepositoryPath = selectedFolder;
+            RepositoryName = "Repository unavailable";
+            RepositoryPath = selectedFolder;
+            RepositorySummary = exception.Message;
             RepositoryItems.Clear();
-
-            RepositoryStatusText =
-                $"Repository inspection failed: {exception.Message}";
+            StatusText = "Repository inspection failed.";
         }
         finally
         {
@@ -258,7 +283,7 @@ public sealed class MainWindowViewModel :
                 Models.Clear();
                 SelectedModel = null;
                 StatusText =
-                    "Ollama is not available at 127.0.0.1:11434.";
+                    "Ollama is unavailable at 127.0.0.1:11434.";
                 return;
             }
 
@@ -281,14 +306,14 @@ public sealed class MainWindowViewModel :
                     : Models.FirstOrDefault();
 
             StatusText = Models.Count == 0
-                ? "Connected, but no local models were found."
-                : $"Connected. {Models.Count} model(s) available.";
+                ? "Connected to Ollama, but no models were found."
+                : $"Local AI connected • {Models.Count} model(s)";
         }
         catch (Exception exception)
         {
             Models.Clear();
             SelectedModel = null;
-            StatusText = $"Connection failed: {exception.Message}";
+            StatusText = $"Ollama connection failed: {exception.Message}";
         }
         finally
         {
@@ -300,7 +325,7 @@ public sealed class MainWindowViewModel :
     {
         return !IsBusy &&
                !string.IsNullOrWhiteSpace(SelectedModel) &&
-               !string.IsNullOrWhiteSpace(Prompt);
+               !string.IsNullOrWhiteSpace(MessageInput);
     }
 
     private async Task SendAsync()
@@ -310,14 +335,27 @@ public sealed class MainWindowViewModel :
             return;
         }
 
+        string model = SelectedModel!;
+        string prompt = MessageInput.Trim();
+
+        MessageInput = string.Empty;
+
+        Messages.Add(
+            new ChatMessageViewModel(
+                isUser: true,
+                prompt));
+
+        ChatMessageViewModel assistantMessage =
+            new(
+                isUser: false,
+                string.Empty);
+
+        Messages.Add(assistantMessage);
+
         _requestCancellation?.Dispose();
         _requestCancellation = new CancellationTokenSource();
 
-        string model = SelectedModel!;
-        string prompt = Prompt.Trim();
-
         IsBusy = true;
-        Response = string.Empty;
         ElapsedText = "00:00.0";
         StatusText = $"Generating with {model}...";
 
@@ -335,30 +373,36 @@ public sealed class MainWindowViewModel :
                     _requestCancellation.Token))
             {
                 responseBuilder.Append(chunk);
-                Response = responseBuilder.ToString();
+                assistantMessage.Content =
+                    responseBuilder.ToString();
             }
 
             StatusText = "Response completed.";
         }
         catch (OperationCanceledException)
         {
+            if (string.IsNullOrWhiteSpace(assistantMessage.Content))
+            {
+                assistantMessage.Content = "Request cancelled.";
+            }
+
             StatusText = "Request cancelled.";
         }
         catch (HttpRequestException exception)
         {
-            StatusText = "Connection to Ollama was lost.";
-
-            Response =
+            assistantMessage.Content =
                 $"Ollama connection error:{Environment.NewLine}" +
                 exception.Message;
+
+            StatusText = "Connection to Ollama was lost.";
         }
         catch (Exception exception)
         {
-            StatusText = "Generation failed.";
-
-            Response =
-                $"Error:{Environment.NewLine}" +
+            assistantMessage.Content =
+                $"Generation error:{Environment.NewLine}" +
                 exception.Message;
+
+            StatusText = "Generation failed.";
         }
         finally
         {
@@ -384,13 +428,6 @@ public sealed class MainWindowViewModel :
         _requestCancellation.Cancel();
     }
 
-    private void ClearResponse()
-    {
-        Response = string.Empty;
-        ElapsedText = "00:00.0";
-        StatusText = "Response cleared.";
-    }
-
     private void OnElapsedTimerTick(
         object? sender,
         EventArgs e)
@@ -400,7 +437,8 @@ public sealed class MainWindowViewModel :
 
     private void UpdateElapsedText()
     {
-        ElapsedText = _stopwatch.Elapsed.ToString(@"mm\:ss\.f");
+        ElapsedText =
+            _stopwatch.Elapsed.ToString(@"mm\:ss\.f");
     }
 
     public void Dispose()
