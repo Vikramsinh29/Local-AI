@@ -1,23 +1,37 @@
-﻿using System.Text;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
+﻿using System.Windows;
+using LocalForge.Desktop.ViewModels;
+using LocalForge.Infrastructure.Ollama;
 
 namespace LocalForge.Desktop;
 
-/// <summary>
-/// Interaction logic for MainWindow.xaml
-/// </summary>
 public partial class MainWindow : Window
 {
+    private readonly MainWindowViewModel _viewModel;
+
     public MainWindow()
     {
         InitializeComponent();
+
+        _viewModel = new MainWindowViewModel(
+            new OllamaClient());
+
+        DataContext = _viewModel;
+
+        Loaded += MainWindow_Loaded;
+        Closed += MainWindow_Closed;
+    }
+
+    private async void MainWindow_Loaded(
+        object sender,
+        RoutedEventArgs e)
+    {
+        await _viewModel.InitializeAsync();
+    }
+
+    private void MainWindow_Closed(
+        object? sender,
+        EventArgs e)
+    {
+        _viewModel.Dispose();
     }
 }
