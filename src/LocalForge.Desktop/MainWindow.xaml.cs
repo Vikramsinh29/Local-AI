@@ -1,7 +1,9 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
+using LocalForge.Desktop.Services;
 using LocalForge.Desktop.ViewModels;
 using LocalForge.Infrastructure.Ollama;
+using LocalForge.Infrastructure.Repositories;
 
 namespace LocalForge.Desktop;
 
@@ -14,7 +16,9 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         _viewModel = new MainWindowViewModel(
-            new OllamaClient());
+            new OllamaClient(),
+            new FolderPickerService(),
+            new RepositoryInspector());
 
         DataContext = _viewModel;
 

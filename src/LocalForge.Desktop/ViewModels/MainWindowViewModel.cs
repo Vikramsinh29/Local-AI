@@ -1,11 +1,13 @@
 ﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Windows.Threading;
 using LocalForge.Core.Interfaces;
+using LocalForge.Core.Models;
 using LocalForge.Desktop.Commands;
 
 namespace LocalForge.Desktop.ViewModels;
@@ -15,6 +17,8 @@ public sealed class MainWindowViewModel :
     IDisposable
 {
     private readonly IOllamaClient _ollamaClient;
+    private readonly IFolderPickerService _folderPickerService;
+    private readonly IRepositoryInspector _repositoryInspector;
     private readonly Stopwatch _stopwatch = new();
     private readonly DispatcherTimer _elapsedTimer;
 
@@ -23,16 +27,32 @@ public sealed class MainWindowViewModel :
     private string _response = string.Empty;
     private string _statusText = "Starting...";
     private string _elapsedText = "00:00.0";
+    private string _selectedRepositoryPath = "No repository selected.";
+    private string _repositoryStatusText =
+        "Select a repository folder to inspect it.";
     private bool _isBusy;
     private CancellationTokenSource? _requestCancellation;
 
-    public MainWindowViewModel(IOllamaClient ollamaClient)
+    public MainWindowViewModel(
+        IOllamaClient ollamaClient,
+        IFolderPickerService folderPickerService,
+        IRepositoryInspector repositoryInspector)
     {
         _ollamaClient = ollamaClient ??
             throw new ArgumentNullException(nameof(ollamaClient));
 
+        _folderPickerService = folderPickerService ??
+            throw new ArgumentNullException(nameof(folderPickerService));
+
+        _repositoryInspector = repositoryInspector ??
+            throw new ArgumentNullException(nameof(repositoryInspector));
+
         RefreshModelsCommand = new AsyncRelayCommand(
             RefreshModelsAsync,
+            () => !IsBusy);
+
+        BrowseRepositoryCommand = new AsyncRelayCommand(
+            SelectRepositoryAsync,
             () => !IsBusy);
 
         SendCommand = new AsyncRelayCommand(
@@ -45,8 +65,7 @@ public sealed class MainWindowViewModel :
 
         ClearResponseCommand = new RelayCommand(
             ClearResponse,
-            () => !IsBusy &&
-                  !string.IsNullOrEmpty(Response));
+            () => !IsBusy && !string.IsNullOrEmpty(Response));
 
         _elapsedTimer = new DispatcherTimer
         {
@@ -60,7 +79,11 @@ public sealed class MainWindowViewModel :
 
     public ObservableCollection<string> Models { get; } = [];
 
+    public ObservableCollection<string> RepositoryItems { get; } = [];
+
     public AsyncRelayCommand RefreshModelsCommand { get; }
+
+    public AsyncRelayCommand BrowseRepositoryCommand { get; }
 
     public AsyncRelayCommand SendCommand { get; }
 
@@ -116,6 +139,18 @@ public sealed class MainWindowViewModel :
         private set => SetField(ref _elapsedText, value);
     }
 
+    public string SelectedRepositoryPath
+    {
+        get => _selectedRepositoryPath;
+        private set => SetField(ref _selectedRepositoryPath, value);
+    }
+
+    public string RepositoryStatusText
+    {
+        get => _repositoryStatusText;
+        private set => SetField(ref _repositoryStatusText, value);
+    }
+
     public bool IsBusy
     {
         get => _isBusy;
@@ -129,6 +164,7 @@ public sealed class MainWindowViewModel :
             OnPropertyChanged(nameof(IsNotBusy));
 
             RefreshModelsCommand.NotifyCanExecuteChanged();
+            BrowseRepositoryCommand.NotifyCanExecuteChanged();
             SendCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
             ClearResponseCommand.NotifyCanExecuteChanged();
@@ -140,6 +176,71 @@ public sealed class MainWindowViewModel :
     public Task InitializeAsync()
     {
         return RefreshModelsAsync();
+    }
+
+    private async Task SelectRepositoryAsync()
+    {
+        string? initialDirectory =
+            Directory.Exists(SelectedRepositoryPath)
+                ? SelectedRepositoryPath
+                : null;
+
+        string? selectedFolder =
+            _folderPickerService.PickFolder(initialDirectory);
+
+        if (string.IsNullOrWhiteSpace(selectedFolder))
+        {
+            return;
+        }
+
+        IsBusy = true;
+        RepositoryStatusText = "Inspecting repository...";
+
+        try
+        {
+            RepositoryInfo repository =
+                await _repositoryInspector.InspectAsync(selectedFolder);
+
+            SelectedRepositoryPath = repository.RootPath;
+            RepositoryItems.Clear();
+
+            foreach (string solution in repository.SolutionFiles)
+            {
+                RepositoryItems.Add($"[Solution] {solution}");
+            }
+
+            foreach (string project in repository.ProjectFiles)
+            {
+                RepositoryItems.Add($"[Project] {project}");
+            }
+
+            if (RepositoryItems.Count == 0)
+            {
+                RepositoryItems.Add(
+                    "No .sln, .slnx or .csproj files found.");
+            }
+
+            string gitStatus = repository.IsGitRepository
+                ? "Git repository"
+                : "Not a Git repository";
+
+            RepositoryStatusText =
+                $"{gitStatus} | " +
+                $"{repository.SolutionFiles.Count} solution file(s) | " +
+                $"{repository.ProjectFiles.Count} project file(s)";
+        }
+        catch (Exception exception)
+        {
+            SelectedRepositoryPath = selectedFolder;
+            RepositoryItems.Clear();
+
+            RepositoryStatusText =
+                $"Repository inspection failed: {exception.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     private async Task RefreshModelsAsync()
@@ -246,6 +347,7 @@ public sealed class MainWindowViewModel :
         catch (HttpRequestException exception)
         {
             StatusText = "Connection to Ollama was lost.";
+
             Response =
                 $"Ollama connection error:{Environment.NewLine}" +
                 exception.Message;
@@ -253,8 +355,10 @@ public sealed class MainWindowViewModel :
         catch (Exception exception)
         {
             StatusText = "Generation failed.";
+
             Response =
-                $"Error:{Environment.NewLine}{exception.Message}";
+                $"Error:{Environment.NewLine}" +
+                exception.Message;
         }
         finally
         {
@@ -264,7 +368,7 @@ public sealed class MainWindowViewModel :
 
             IsBusy = false;
 
-            _requestCancellation.Dispose();
+            _requestCancellation?.Dispose();
             _requestCancellation = null;
         }
     }
@@ -296,8 +400,7 @@ public sealed class MainWindowViewModel :
 
     private void UpdateElapsedText()
     {
-        ElapsedText =
-            _stopwatch.Elapsed.ToString(@"mm\:ss\.f");
+        ElapsedText = _stopwatch.Elapsed.ToString(@"mm\:ss\.f");
     }
 
     public void Dispose()
@@ -338,4 +441,3 @@ public sealed class MainWindowViewModel :
             new PropertyChangedEventArgs(propertyName));
     }
 }
-
