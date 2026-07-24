@@ -25,6 +25,8 @@ public sealed class MainWindowViewModel :
     private readonly DispatcherTimer _elapsedTimer;
 
     private string? _selectedModel;
+    private GenerationProfile _selectedGenerationProfile =
+        GenerationProfiles.Balanced;
     private string _messageInput = string.Empty;
     private string _statusText = "Starting...";
     private string _elapsedText = string.Empty;
@@ -107,6 +109,9 @@ public sealed class MainWindowViewModel :
 
     public ObservableCollection<string> Models { get; } = [];
 
+    public IReadOnlyList<GenerationProfile> AvailableGenerationProfiles
+        { get; } = GenerationProfiles.All;
+
     public ObservableCollection<ChatMessageViewModel> Messages { get; } = [];
 
     public ObservableCollection<RepositoryTreeItemViewModel> RepositoryTree
@@ -145,6 +150,21 @@ public sealed class MainWindowViewModel :
             if (SetField(ref _selectedModel, value))
             {
                 SendCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public GenerationProfile SelectedGenerationProfile
+    {
+        get => _selectedGenerationProfile;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+
+            if (SetField(ref _selectedGenerationProfile, value))
+            {
+                OnPropertyChanged(nameof(ContextSizeText));
+                StatusText = value.Description;
             }
         }
     }
@@ -232,7 +252,8 @@ public sealed class MainWindowViewModel :
         $"{ContextFiles.Count} file(s) • " +
         $"{ContextSizeBytes / 1024d:0.#} / " +
         $"{_repositoryFileContextService.MaximumTotalBytes / 1024} KB • " +
-        $"~{EstimatedContextTokens:N0} tokens";
+        $"~{EstimatedContextTokens:N0} tokens • " +
+        $"{SelectedGenerationProfile.Name}";
 
     public bool IsRepositoryPanelOpen
     {
@@ -548,7 +569,8 @@ public sealed class MainWindowViewModel :
         {
             modelPrompt = RepositoryContextPromptBuilder.Build(
                 prompt,
-                ContextFiles.Select(file => file.File));
+                ContextFiles.Select(file => file.File),
+                SelectedGenerationProfile.MaximumRepositoryContextTokens);
         }
         catch (InvalidOperationException exception)
         {
@@ -589,6 +611,7 @@ public sealed class MainWindowViewModel :
                 _ollamaClient.StreamGenerateAsync(
                     model,
                     modelPrompt,
+                    SelectedGenerationProfile,
                     _requestCancellation.Token))
             {
                 responseBuilder.Append(chunk);

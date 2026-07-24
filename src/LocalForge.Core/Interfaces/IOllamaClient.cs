@@ -1,4 +1,6 @@
-﻿namespace LocalForge.Core.Interfaces;
+using LocalForge.Core.Models;
+
+namespace LocalForge.Core.Interfaces;
 
 public interface IOllamaClient
 {
@@ -11,5 +13,6 @@ public interface IOllamaClient
     IAsyncEnumerable<string> StreamGenerateAsync(
         string model,
         string prompt,
+        GenerationProfile profile,
         CancellationToken cancellationToken = default);
 }

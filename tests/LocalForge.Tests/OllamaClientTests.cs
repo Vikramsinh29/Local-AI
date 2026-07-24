@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using LocalForge.Core.Models;
 using LocalForge.Infrastructure.Ollama;
 
 namespace LocalForge.Tests;
@@ -82,7 +83,8 @@ public sealed class OllamaClientTests
         await foreach (string chunk in
             client.StreamGenerateAsync(
                 "test-model",
-                "test prompt"))
+                "test prompt",
+                GenerationProfiles.Balanced))
         {
             chunks.Add(chunk);
         }
@@ -120,6 +122,46 @@ public sealed class OllamaClientTests
             request.RootElement
                 .GetProperty("keep_alive")
                 .GetString());
+    }
+
+    [Theory]
+    [MemberData(nameof(GenerationProfileCases))]
+    public async Task StreamGenerateAsync_AppliesGenerationProfile(
+        GenerationProfile profile)
+    {
+        string? requestJson = null;
+
+        using HttpClient httpClient = CreateHttpClient(
+            (request, _) =>
+            {
+                requestJson = request.Content!
+                    .ReadAsStringAsync()
+                    .GetAwaiter()
+                    .GetResult();
+
+                return CreateStreamingResponse(
+                    """{"response":"","done":true}""");
+            });
+        using OllamaClient client = new(httpClient);
+
+        await ReadAllChunksAsync(
+            client,
+            profile: profile);
+
+        using JsonDocument request =
+            JsonDocument.Parse(requestJson!);
+        JsonElement options =
+            request.RootElement.GetProperty("options");
+
+        Assert.Equal(
+            profile.MaximumOutputTokens,
+            options.GetProperty("num_predict").GetInt32());
+        Assert.Equal(
+            profile.ContextWindowTokens,
+            options.GetProperty("num_ctx").GetInt32());
+        Assert.Equal(
+            profile.Temperature,
+            options.GetProperty("temperature").GetDouble());
     }
 
     [Fact]
@@ -204,6 +246,7 @@ public sealed class OllamaClientTests
             client.StreamGenerateAsync(
                     "test-model",
                     "test prompt",
+                    GenerationProfiles.Balanced,
                     cancellation.Token)
                 .GetAsyncEnumerator();
 
@@ -218,16 +261,27 @@ public sealed class OllamaClientTests
 
     private static async Task ReadAllChunksAsync(
         OllamaClient client,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        GenerationProfile? profile = null)
     {
         await foreach (string _ in
             client.StreamGenerateAsync(
                 "test-model",
                 "test prompt",
+                profile ?? GenerationProfiles.Balanced,
                 cancellationToken))
         {
         }
     }
+
+    public static TheoryData<GenerationProfile>
+        GenerationProfileCases =>
+        new()
+        {
+            GenerationProfiles.Fast,
+            GenerationProfiles.Balanced,
+            GenerationProfiles.Accurate
+        };
 
     private static HttpResponseMessage CreateStreamingResponse(
         string content) =>

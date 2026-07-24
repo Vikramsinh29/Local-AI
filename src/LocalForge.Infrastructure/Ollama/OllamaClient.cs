@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using LocalForge.Core.Interfaces;
+using LocalForge.Core.Models;
 
 namespace LocalForge.Infrastructure.Ollama;
 
@@ -75,17 +76,23 @@ public sealed class OllamaClient : IOllamaClient, IDisposable
     public async IAsyncEnumerable<string> StreamGenerateAsync(
         string model,
         string prompt,
+        GenerationProfile profile,
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(model);
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+        ArgumentNullException.ThrowIfNull(profile);
 
         GenerateRequest body = new(
             Model: model,
             Prompt: prompt,
             Stream: true,
-            KeepAlive: GenerationKeepAlive);
+            KeepAlive: GenerationKeepAlive,
+            Options: new GenerateOptions(
+                profile.MaximumOutputTokens,
+                profile.ContextWindowTokens,
+                profile.Temperature));
 
         using HttpRequestMessage request =
             new(HttpMethod.Post, "api/generate")
@@ -161,7 +168,17 @@ public sealed class OllamaClient : IOllamaClient, IDisposable
         bool Stream,
         [property: System.Text.Json.Serialization.JsonPropertyName(
             "keep_alive")]
-        string KeepAlive);
+        string KeepAlive,
+        GenerateOptions Options);
+
+    private sealed record GenerateOptions(
+        [property: System.Text.Json.Serialization.JsonPropertyName(
+            "num_predict")]
+        int MaximumOutputTokens,
+        [property: System.Text.Json.Serialization.JsonPropertyName(
+            "num_ctx")]
+        int ContextWindowTokens,
+        double Temperature);
 
     private sealed record GenerateStreamResponse(
         string? Response,

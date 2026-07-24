@@ -227,6 +227,29 @@ public sealed class RepositoryFileContextServiceTests : IDisposable
         Assert.True(isLikelySlow);
     }
 
+    [Fact]
+    public void Build_AppliesSelectedGenerationProfileBudget()
+    {
+        string content = new(
+            'a',
+            GenerationProfiles.Fast.MaximumRepositoryContextTokens * 4 + 1);
+        RepositoryContextFile file =
+            new("large.txt", content, content.Length);
+
+        InvalidOperationException exception =
+            Assert.Throws<InvalidOperationException>(
+                () => RepositoryContextPromptBuilder.Build(
+                    "Explain this file.",
+                    [file],
+                    GenerationProfiles.Fast
+                        .MaximumRepositoryContextTokens));
+
+        Assert.Contains(
+            "selected generation preset",
+            exception.Message,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     public void Dispose()
     {
         try

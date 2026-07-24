@@ -11,21 +11,25 @@ public static class RepositoryContextPromptBuilder
 
     public static string Build(
         string userPrompt,
-        IEnumerable<RepositoryContextFile> contextFiles)
+        IEnumerable<RepositoryContextFile> contextFiles,
+        int maximumContextTokens = MaximumContextTokens)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userPrompt);
         ArgumentNullException.ThrowIfNull(contextFiles);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(
+            maximumContextTokens);
 
         RepositoryContextFile[] files = contextFiles.ToArray();
         int estimatedTokens =
             files.Sum(file => file.EstimatedTokens);
 
-        if (estimatedTokens > MaximumContextTokens)
+        if (estimatedTokens > maximumContextTokens)
         {
             throw new InvalidOperationException(
                 $"Selected repository context is approximately " +
                 $"{estimatedTokens:N0} tokens. Remove files until it is " +
-                $"{MaximumContextTokens:N0} tokens or less.");
+                $"{maximumContextTokens:N0} tokens or less for the " +
+                "selected generation preset.");
         }
 
         if (files.Length == 0)
