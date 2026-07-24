@@ -113,7 +113,8 @@ public sealed class OllamaClient : IOllamaClient, IDisposable
 
             if (line is null)
             {
-                break;
+                throw new InvalidDataException(
+                    "The Ollama response ended before generation completed.");
             }
 
             if (string.IsNullOrWhiteSpace(line))
@@ -133,7 +134,7 @@ public sealed class OllamaClient : IOllamaClient, IDisposable
 
             if (chunk?.Done == true)
             {
-                break;
+                yield break;
             }
         }
     }
