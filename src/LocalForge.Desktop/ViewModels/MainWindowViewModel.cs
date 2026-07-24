@@ -8,6 +8,7 @@ using System.Text;
 using System.Windows.Threading;
 using LocalForge.Core.Interfaces;
 using LocalForge.Core.Models;
+using LocalForge.Core.Repositories;
 using LocalForge.Desktop.Commands;
 
 namespace LocalForge.Desktop.ViewModels;
@@ -19,6 +20,7 @@ public sealed class MainWindowViewModel :
     private readonly IOllamaClient _ollamaClient;
     private readonly IFolderPickerService _folderPickerService;
     private readonly IRepositoryInspector _repositoryInspector;
+    private readonly IRepositoryFileContextService _repositoryFileContextService;
     private readonly Stopwatch _stopwatch = new();
     private readonly DispatcherTimer _elapsedTimer;
 
@@ -31,6 +33,7 @@ public sealed class MainWindowViewModel :
     private string _repositorySummary =
         "Select a repository to add project context.";
     private RepositoryTreeItemViewModel? _selectedRepositoryItem;
+    private RepositoryContextFileViewModel? _selectedContextFile;
     private bool _isRepositoryPanelOpen;
     private bool _isBusy;
     private CancellationTokenSource? _requestCancellation;
@@ -38,7 +41,8 @@ public sealed class MainWindowViewModel :
     public MainWindowViewModel(
         IOllamaClient ollamaClient,
         IFolderPickerService folderPickerService,
-        IRepositoryInspector repositoryInspector)
+        IRepositoryInspector repositoryInspector,
+        IRepositoryFileContextService repositoryFileContextService)
     {
         _ollamaClient = ollamaClient ??
             throw new ArgumentNullException(nameof(ollamaClient));
@@ -50,6 +54,11 @@ public sealed class MainWindowViewModel :
         _repositoryInspector = repositoryInspector ??
             throw new ArgumentNullException(
                 nameof(repositoryInspector));
+
+        _repositoryFileContextService =
+            repositoryFileContextService ??
+            throw new ArgumentNullException(
+                nameof(repositoryFileContextService));
 
         RefreshModelsCommand = new AsyncRelayCommand(
             RefreshModelsAsync,
@@ -65,6 +74,14 @@ public sealed class MainWindowViewModel :
 
         ToggleRepositoryPanelCommand = new RelayCommand(
             ToggleRepositoryPanel);
+
+        AddSelectedFileToContextCommand = new AsyncRelayCommand(
+            AddSelectedFileToContextAsync,
+            CanAddSelectedFileToContext);
+
+        RemoveSelectedContextFileCommand = new RelayCommand(
+            RemoveSelectedContextFile,
+            () => SelectedContextFile is not null && !IsBusy);
 
         SendCommand = new AsyncRelayCommand(
             SendAsync,
@@ -97,6 +114,11 @@ public sealed class MainWindowViewModel :
         get;
     } = [];
 
+    public ObservableCollection<RepositoryContextFileViewModel> ContextFiles
+    {
+        get;
+    } = [];
+
     public AsyncRelayCommand RefreshModelsCommand { get; }
 
     public AsyncRelayCommand BrowseRepositoryCommand { get; }
@@ -104,6 +126,10 @@ public sealed class MainWindowViewModel :
     public AsyncRelayCommand RefreshRepositoryCommand { get; }
 
     public RelayCommand ToggleRepositoryPanelCommand { get; }
+
+    public AsyncRelayCommand AddSelectedFileToContextCommand { get; }
+
+    public RelayCommand RemoveSelectedContextFileCommand { get; }
 
     public AsyncRelayCommand SendCommand { get; }
 
@@ -175,8 +201,38 @@ public sealed class MainWindowViewModel :
     public RepositoryTreeItemViewModel? SelectedRepositoryItem
     {
         get => _selectedRepositoryItem;
-        set => SetField(ref _selectedRepositoryItem, value);
+        set
+        {
+            if (SetField(ref _selectedRepositoryItem, value))
+            {
+                AddSelectedFileToContextCommand.NotifyCanExecuteChanged();
+            }
+        }
     }
+
+    public RepositoryContextFileViewModel? SelectedContextFile
+    {
+        get => _selectedContextFile;
+        set
+        {
+            if (SetField(ref _selectedContextFile, value))
+            {
+                RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public long ContextSizeBytes =>
+        ContextFiles.Sum(file => file.File.SizeBytes);
+
+    public int EstimatedContextTokens =>
+        ContextFiles.Sum(file => file.File.EstimatedTokens);
+
+    public string ContextSizeText =>
+        $"{ContextFiles.Count} file(s) • " +
+        $"{ContextSizeBytes / 1024d:0.#} / " +
+        $"{_repositoryFileContextService.MaximumTotalBytes / 1024} KB • " +
+        $"~{EstimatedContextTokens:N0} tokens";
 
     public bool IsRepositoryPanelOpen
     {
@@ -199,6 +255,8 @@ public sealed class MainWindowViewModel :
             RefreshModelsCommand.NotifyCanExecuteChanged();
             BrowseRepositoryCommand.NotifyCanExecuteChanged();
             RefreshRepositoryCommand.NotifyCanExecuteChanged();
+            AddSelectedFileToContextCommand.NotifyCanExecuteChanged();
+            RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
             SendCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
             NewChatCommand.NotifyCanExecuteChanged();
@@ -301,6 +359,7 @@ public sealed class MainWindowViewModel :
                 $"{repository.ProjectFiles.Count} project file(s)";
 
             RepositoryTree.Clear();
+            ClearContextFiles();
 
             foreach (RepositoryTreeNode rootEntry in
                      repository.RootEntries)
@@ -326,6 +385,7 @@ public sealed class MainWindowViewModel :
 
             RepositoryTree.Clear();
             SelectedRepositoryItem = null;
+            ClearContextFiles();
 
             StatusText = "Repository inspection failed.";
         }
@@ -399,6 +459,74 @@ public sealed class MainWindowViewModel :
                !string.IsNullOrWhiteSpace(MessageInput);
     }
 
+    private bool CanAddSelectedFileToContext()
+    {
+        return !IsBusy &&
+               SelectedRepositoryItem is { IsDirectory: false } selected &&
+               Directory.Exists(RepositoryPath) &&
+               ContextFiles.All(file =>
+                   !file.RelativePath.Equals(
+                       selected.RelativePath,
+                       StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task AddSelectedFileToContextAsync()
+    {
+        if (!CanAddSelectedFileToContext())
+        {
+            return;
+        }
+
+        RepositoryContextReadResult result =
+            await _repositoryFileContextService.ReadAsync(
+                RepositoryPath,
+                SelectedRepositoryItem!.RelativePath,
+                ContextSizeBytes);
+
+        if (!result.IsSuccess)
+        {
+            StatusText = result.Error ?? "The file could not be added.";
+            return;
+        }
+
+        ContextFiles.Add(
+            new RepositoryContextFileViewModel(result.File!));
+
+        SelectedContextFile = ContextFiles[^1];
+        NotifyContextChanged();
+        StatusText = $"Added to context: {result.File!.RelativePath}";
+    }
+
+    private void RemoveSelectedContextFile()
+    {
+        if (SelectedContextFile is null)
+        {
+            return;
+        }
+
+        string relativePath = SelectedContextFile.RelativePath;
+        ContextFiles.Remove(SelectedContextFile);
+        SelectedContextFile = ContextFiles.LastOrDefault();
+        NotifyContextChanged();
+        StatusText = $"Removed from context: {relativePath}";
+    }
+
+    private void ClearContextFiles()
+    {
+        ContextFiles.Clear();
+        SelectedContextFile = null;
+        NotifyContextChanged();
+    }
+
+    private void NotifyContextChanged()
+    {
+        OnPropertyChanged(nameof(ContextSizeBytes));
+        OnPropertyChanged(nameof(EstimatedContextTokens));
+        OnPropertyChanged(nameof(ContextSizeText));
+        AddSelectedFileToContextCommand.NotifyCanExecuteChanged();
+        RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
+    }
+
     private async Task SendAsync()
     {
         if (!CanSend())
@@ -408,6 +536,9 @@ public sealed class MainWindowViewModel :
 
         string model = SelectedModel!;
         string prompt = MessageInput.Trim();
+        string modelPrompt = RepositoryContextPromptBuilder.Build(
+            prompt,
+            ContextFiles.Select(file => file.File));
 
         MessageInput = string.Empty;
 
@@ -441,7 +572,7 @@ public sealed class MainWindowViewModel :
             await foreach (string chunk in
                 _ollamaClient.StreamGenerateAsync(
                     model,
-                    prompt,
+                    modelPrompt,
                     _requestCancellation.Token))
             {
                 responseBuilder.Append(chunk);

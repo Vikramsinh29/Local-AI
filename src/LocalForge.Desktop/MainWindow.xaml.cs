@@ -19,7 +19,8 @@ public partial class MainWindow : Window
         _viewModel = new MainWindowViewModel(
             new OllamaClient(),
             new FolderPickerService(),
-            new RepositoryInspector());
+            new RepositoryInspector(),
+            new RepositoryFileContextService());
 
         DataContext = _viewModel;
 

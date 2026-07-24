@@ -225,9 +225,16 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
+                        <TextBlock Margin="4,0,4,8"
+                                   FontSize="10"
+                                   Foreground="#666666"
+                                   Text="{Binding ContextSizeText}"/>
+
                         <TextBox x:Name="MessageInputTextBox"
+                                 Grid.Row="1"
                                  MinHeight="54"
                                  MaxHeight="160"
                                  Padding="4"
@@ -241,7 +248,7 @@
                                  Text="{Binding MessageInput,
                                                 UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <Grid Grid.Row="1"
+                        <Grid Grid.Row="2"
                               Margin="0,10,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -308,6 +315,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="180"/>
                 </Grid.RowDefinitions>
 
                 <Grid Grid.Row="0"
@@ -413,7 +421,67 @@
                                        Margin="12,7,0,0"
                                        Text="{Binding SelectedRepositoryItem.ModifiedText}"/>
                         </Grid>
+
+                        <Button Margin="0,12,0,0"
+                                Padding="12,7"
+                                Command="{Binding AddSelectedFileToContextCommand}"
+                                Content="Add file to AI context"/>
                     </StackPanel>
+                </Border>
+
+                <Border Grid.Row="4"
+                        Margin="12,0,12,12"
+                        Padding="12"
+                        Background="#F7F7F8"
+                        CornerRadius="10">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="Files sent with each prompt"/>
+
+                        <ListBox Grid.Row="1"
+                                 Margin="0,8"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 ItemsSource="{Binding ContextFiles}"
+                                 SelectedItem="{Binding SelectedContextFile}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,3">
+                                        <TextBlock FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Text="{Binding RelativePath}"/>
+                                        <TextBlock FontSize="9"
+                                                   Foreground="#777777"
+                                                   Text="{Binding SizeText}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock VerticalAlignment="Center"
+                                       FontSize="10"
+                                       Foreground="#666666"
+                                       Text="{Binding ContextSizeText}"/>
+
+                            <Button Grid.Column="1"
+                                    Margin="8,0,0,0"
+                                    Padding="10,5"
+                                    Command="{Binding RemoveSelectedContextFileCommand}"
+                                    Content="Remove"/>
+                        </Grid>
+                    </Grid>
                 </Border>
             </Grid>
         </Border>
