@@ -27,6 +27,25 @@ public sealed class RepositoryFileContextService :
         ".designer.cs", ".generated.cs", ".g.cs", ".g.i.cs", ".min.css", ".min.js"
     ];
 
+    private static readonly HashSet<string> SecretFileNames =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "appsettings.Development.json",
+            "credentials.json",
+            "id_dsa",
+            "id_ecdsa",
+            "id_ed25519",
+            "id_rsa",
+            "secrets.json",
+            "service-account.json"
+        };
+
+    private static readonly HashSet<string> SecretExtensions =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".key", ".p12", ".pem", ".pfx"
+        };
+
     public long MaximumFileBytes => 128 * 1024;
 
     public long MaximumTotalBytes => 512 * 1024;
@@ -69,6 +88,12 @@ public sealed class RepositoryFileContextService :
         {
             return RepositoryContextReadResult.Failure(
                 "Binary files cannot be added to context.");
+        }
+
+        if (IsSecretFile(fullPath))
+        {
+            return RepositoryContextReadResult.Failure(
+                "Files that may contain secrets cannot be added to context.");
         }
 
         if (!File.Exists(fullPath))
@@ -131,6 +156,16 @@ public sealed class RepositoryFileContextService :
                 normalizedRelativePath,
                 content,
                 bytes.LongLength));
+    }
+
+    private static bool IsSecretFile(string fullPath)
+    {
+        string fileName = Path.GetFileName(fullPath);
+
+        return SecretFileNames.Contains(fileName) ||
+               SecretExtensions.Contains(Path.GetExtension(fileName)) ||
+               fileName.Equals(".env", StringComparison.OrdinalIgnoreCase) ||
+               fileName.StartsWith(".env.", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ContainsReparsePoint(

@@ -53,6 +53,29 @@ public sealed class RepositoryFileContextServiceTests : IDisposable
         Assert.False(result.IsSuccess);
     }
 
+    [Theory]
+    [InlineData(".env")]
+    [InlineData(".env.local")]
+    [InlineData("appsettings.Development.json")]
+    [InlineData("credentials.json")]
+    [InlineData("id_rsa")]
+    [InlineData("secrets.json")]
+    [InlineData("service-account.json")]
+    [InlineData("certificate.pem")]
+    [InlineData("signing.key")]
+    public async Task ReadAsync_RejectsFilesThatMayContainSecrets(
+        string relativePath)
+    {
+        string fullPath = Path.Combine(_temporaryDirectory, relativePath);
+        await File.WriteAllTextAsync(fullPath, "secret");
+
+        RepositoryContextReadResult result =
+            await _service.ReadAsync(_temporaryDirectory, relativePath, 0);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("secrets", result.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task ReadAsync_AppliesIndividualAndTotalLimits()
     {
