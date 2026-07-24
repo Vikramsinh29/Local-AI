@@ -494,7 +494,13 @@ public sealed class MainWindowViewModel :
 
         SelectedContextFile = ContextFiles[^1];
         NotifyContextChanged();
-        StatusText = $"Added to context: {result.File!.RelativePath}";
+        StatusText = RepositoryContextPromptBuilder
+            .IsLikelyToSlowGeneration(
+                ContextFiles.Select(file => file.File))
+            ? $"Added to context: {result.File!.RelativePath}. " +
+              $"Approximately {EstimatedContextTokens:N0} context tokens " +
+              "may slow CPU generation."
+            : $"Added to context: {result.File!.RelativePath}";
     }
 
     private void RemoveSelectedContextFile()
@@ -536,9 +542,19 @@ public sealed class MainWindowViewModel :
 
         string model = SelectedModel!;
         string prompt = MessageInput.Trim();
-        string modelPrompt = RepositoryContextPromptBuilder.Build(
-            prompt,
-            ContextFiles.Select(file => file.File));
+        string modelPrompt;
+
+        try
+        {
+            modelPrompt = RepositoryContextPromptBuilder.Build(
+                prompt,
+                ContextFiles.Select(file => file.File));
+        }
+        catch (InvalidOperationException exception)
+        {
+            StatusText = exception.Message;
+            return;
+        }
 
         MessageInput = string.Empty;
 

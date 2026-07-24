@@ -190,6 +190,43 @@ public sealed class RepositoryFileContextServiceTests : IDisposable
         Assert.EndsWith("Explain this code.", prompt);
     }
 
+    [Fact]
+    public void Build_RejectsContextOverTokenBudget()
+    {
+        string content = new(
+            'a',
+            RepositoryContextPromptBuilder.MaximumContextTokens * 4 + 1);
+        RepositoryContextFile file =
+            new("large.txt", content, content.Length);
+
+        InvalidOperationException exception =
+            Assert.Throws<InvalidOperationException>(
+                () => RepositoryContextPromptBuilder.Build(
+                    "Explain this file.",
+                    [file]));
+
+        Assert.Contains(
+            "Remove files",
+            exception.Message,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void IsLikelyToSlowGeneration_UsesCpuWarningThreshold()
+    {
+        string content = new(
+            'a',
+            RepositoryContextPromptBuilder.SlowContextThresholdTokens * 4);
+        RepositoryContextFile file =
+            new("context.txt", content, content.Length);
+
+        bool isLikelySlow =
+            RepositoryContextPromptBuilder.IsLikelyToSlowGeneration(
+                [file]);
+
+        Assert.True(isLikelySlow);
+    }
+
     public void Dispose()
     {
         try

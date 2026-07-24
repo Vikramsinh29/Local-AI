@@ -5,6 +5,10 @@ namespace LocalForge.Core.Repositories;
 
 public static class RepositoryContextPromptBuilder
 {
+    public const int SlowContextThresholdTokens = 4_000;
+
+    public const int MaximumContextTokens = 16_000;
+
     public static string Build(
         string userPrompt,
         IEnumerable<RepositoryContextFile> contextFiles)
@@ -13,6 +17,16 @@ public static class RepositoryContextPromptBuilder
         ArgumentNullException.ThrowIfNull(contextFiles);
 
         RepositoryContextFile[] files = contextFiles.ToArray();
+        int estimatedTokens =
+            files.Sum(file => file.EstimatedTokens);
+
+        if (estimatedTokens > MaximumContextTokens)
+        {
+            throw new InvalidOperationException(
+                $"Selected repository context is approximately " +
+                $"{estimatedTokens:N0} tokens. Remove files until it is " +
+                $"{MaximumContextTokens:N0} tokens or less.");
+        }
 
         if (files.Length == 0)
         {
@@ -38,5 +52,14 @@ public static class RepositoryContextPromptBuilder
         builder.Append(userPrompt);
 
         return builder.ToString();
+    }
+
+    public static bool IsLikelyToSlowGeneration(
+        IEnumerable<RepositoryContextFile> contextFiles)
+    {
+        ArgumentNullException.ThrowIfNull(contextFiles);
+
+        return contextFiles.Sum(file => file.EstimatedTokens) >=
+               SlowContextThresholdTokens;
     }
 }
