@@ -167,8 +167,15 @@ public sealed class OllamaClientTests
     [Fact]
     public async Task StreamGenerateAsync_ThrowsForHttpError()
     {
+        int requestCount = 0;
+
         using HttpClient httpClient = CreateHttpClient(
-            new HttpResponseMessage(HttpStatusCode.InternalServerError));
+            (_, _) =>
+            {
+                requestCount++;
+                return new HttpResponseMessage(
+                    HttpStatusCode.InternalServerError);
+            });
         using OllamaClient client = new(httpClient);
 
         HttpRequestException exception =
@@ -178,17 +185,85 @@ public sealed class OllamaClientTests
         Assert.Equal(
             HttpStatusCode.InternalServerError,
             exception.StatusCode);
+        Assert.Equal(2, requestCount);
+    }
+
+    [Fact]
+    public async Task StreamGenerateAsync_RetriesConnectionFailureBeforeStreaming()
+    {
+        int requestCount = 0;
+
+        using HttpClient httpClient = CreateHttpClient(
+            (_, _) =>
+            {
+                requestCount++;
+
+                if (requestCount == 1)
+                {
+                    throw new HttpRequestException(
+                        "Connection reset.");
+                }
+
+                return CreateStreamingResponse(
+                    """
+                    {"response":"Recovered","done":false}
+                    {"response":"","done":true}
+                    """);
+            });
+        using OllamaClient client = new(httpClient);
+
+        List<string> chunks = [];
+
+        await foreach (string chunk in
+            client.StreamGenerateAsync(
+                "test-model",
+                "test prompt",
+                GenerationProfiles.Balanced))
+        {
+            chunks.Add(chunk);
+        }
+
+        Assert.Equal(2, requestCount);
+        Assert.Equal(["Recovered"], chunks);
+    }
+
+    [Fact]
+    public async Task StreamGenerateAsync_DoesNotRetryModelNotFound()
+    {
+        int requestCount = 0;
+
+        using HttpClient httpClient = CreateHttpClient(
+            (_, _) =>
+            {
+                requestCount++;
+                return new HttpResponseMessage(
+                    HttpStatusCode.NotFound);
+            });
+        using OllamaClient client = new(httpClient);
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => ReadAllChunksAsync(client));
+
+        Assert.Equal(1, requestCount);
     }
 
     [Fact]
     public async Task StreamGenerateAsync_ThrowsForMalformedResponse()
     {
+        int requestCount = 0;
+
         using HttpClient httpClient = CreateHttpClient(
-            CreateStreamingResponse("not-json"));
+            (_, _) =>
+            {
+                requestCount++;
+                return CreateStreamingResponse("not-json");
+            });
         using OllamaClient client = new(httpClient);
 
         await Assert.ThrowsAsync<JsonException>(
             () => ReadAllChunksAsync(client));
+
+        Assert.Equal(1, requestCount);
     }
 
     [Fact]
@@ -214,11 +289,45 @@ public sealed class OllamaClientTests
     }
 
     [Fact]
+    public async Task StreamGenerateAsync_DoesNotRetryAfterPartialOutput()
+    {
+        int requestCount = 0;
+        const string responseBody =
+            """
+            {"response":"partial","done":false}
+            not-json
+            """;
+
+        using HttpClient httpClient = CreateHttpClient(
+            (_, _) =>
+            {
+                requestCount++;
+                return CreateStreamingResponse(responseBody);
+            });
+        using OllamaClient client = new(httpClient);
+        await using IAsyncEnumerator<string> chunks =
+            client.StreamGenerateAsync(
+                    "test-model",
+                    "test prompt",
+                    GenerationProfiles.Balanced)
+                .GetAsyncEnumerator();
+
+        Assert.True(await chunks.MoveNextAsync());
+        Assert.Equal("partial", chunks.Current);
+        await Assert.ThrowsAsync<JsonException>(
+            async () => await chunks.MoveNextAsync());
+        Assert.Equal(1, requestCount);
+    }
+
+    [Fact]
     public async Task StreamGenerateAsync_HonorsCancellationBeforeRequest()
     {
+        int requestCount = 0;
+
         using HttpClient httpClient = CreateHttpClient(
             (_, cancellationToken) =>
             {
+                requestCount++;
                 cancellationToken.ThrowIfCancellationRequested();
                 return new HttpResponseMessage(HttpStatusCode.OK);
             });
@@ -228,6 +337,8 @@ public sealed class OllamaClientTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => ReadAllChunksAsync(client, cancellation.Token));
+
+        Assert.True(requestCount <= 1);
     }
 
     [Fact]

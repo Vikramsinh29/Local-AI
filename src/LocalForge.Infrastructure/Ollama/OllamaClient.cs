@@ -94,19 +94,10 @@ public sealed class OllamaClient : IOllamaClient, IDisposable
                 profile.ContextWindowTokens,
                 profile.Temperature));
 
-        using HttpRequestMessage request =
-            new(HttpMethod.Post, "api/generate")
-            {
-                Content = JsonContent.Create(body)
-            };
-
         using HttpResponseMessage response =
-            await _httpClient.SendAsync(
-                request,
-                HttpCompletionOption.ResponseHeadersRead,
+            await SendGenerationRequestAsync(
+                body,
                 cancellationToken);
-
-        response.EnsureSuccessStatusCode();
 
         await using Stream responseStream =
             await response.Content.ReadAsStreamAsync(
@@ -148,6 +139,61 @@ public sealed class OllamaClient : IOllamaClient, IDisposable
             }
         }
     }
+
+    private async Task<HttpResponseMessage> SendGenerationRequestAsync(
+        GenerateRequest body,
+        CancellationToken cancellationToken)
+    {
+        const int maximumAttempts = 2;
+
+        for (int attempt = 1; attempt <= maximumAttempts; attempt++)
+        {
+            try
+            {
+                using HttpRequestMessage request =
+                    new(HttpMethod.Post, "api/generate")
+                    {
+                        Content = JsonContent.Create(body)
+                    };
+
+                HttpResponseMessage response =
+                    await _httpClient.SendAsync(
+                        request,
+                        HttpCompletionOption.ResponseHeadersRead,
+                        cancellationToken);
+
+                try
+                {
+                    response.EnsureSuccessStatusCode();
+                    return response;
+                }
+                catch
+                {
+                    response.Dispose();
+                    throw;
+                }
+            }
+            catch (HttpRequestException exception)
+                when (attempt < maximumAttempts &&
+                      IsTransientPreStreamFailure(exception) &&
+                      !cancellationToken.IsCancellationRequested)
+            {
+            }
+        }
+
+        throw new InvalidOperationException(
+            "Ollama request retry loop ended unexpectedly.");
+    }
+
+    private static bool IsTransientPreStreamFailure(
+        HttpRequestException exception) =>
+        exception.StatusCode is null or
+            System.Net.HttpStatusCode.RequestTimeout or
+            System.Net.HttpStatusCode.TooManyRequests or
+            System.Net.HttpStatusCode.InternalServerError or
+            System.Net.HttpStatusCode.BadGateway or
+            System.Net.HttpStatusCode.ServiceUnavailable or
+            System.Net.HttpStatusCode.GatewayTimeout;
 
     public void Dispose()
     {
