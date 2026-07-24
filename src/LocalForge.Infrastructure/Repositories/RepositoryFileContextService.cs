@@ -174,14 +174,18 @@ public sealed class RepositoryFileContextService :
     {
         FileSystemInfo? current = new FileInfo(fullPath);
 
-        while (current is not null &&
-               !current.FullName.Equals(
-                   root,
-                   StringComparison.OrdinalIgnoreCase))
+        while (current is not null)
         {
             if (current.Attributes.HasFlag(FileAttributes.ReparsePoint))
             {
                 return true;
+            }
+
+            if (current.FullName.Equals(
+                root,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                break;
             }
 
             current = current switch

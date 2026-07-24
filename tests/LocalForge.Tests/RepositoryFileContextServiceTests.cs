@@ -129,6 +129,53 @@ public sealed class RepositoryFileContextServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadAsync_RejectsLinkedRepositoryRoot()
+    {
+        string targetPath = Path.Combine(_temporaryDirectory, "target");
+        string linkedRoot = Path.Combine(_temporaryDirectory, "linked-root");
+        Directory.CreateDirectory(targetPath);
+        CreateDirectoryJunction(linkedRoot, targetPath);
+        await File.WriteAllTextAsync(
+            Path.Combine(targetPath, "source.cs"),
+            "return 42;");
+
+        RepositoryContextReadResult result =
+            await _service.ReadAsync(linkedRoot, "source.cs", 0);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains(
+            "Linked files and folders",
+            result.Error,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void CreateDirectoryJunction(
+        string junctionPath,
+        string targetPath)
+    {
+        System.Diagnostics.ProcessStartInfo startInfo = new()
+        {
+            FileName = "powershell.exe",
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        startInfo.ArgumentList.Add("-NoProfile");
+        startInfo.ArgumentList.Add("-NonInteractive");
+        startInfo.ArgumentList.Add("-Command");
+        startInfo.ArgumentList.Add(
+            $"New-Item -ItemType Junction -Path " +
+            $"'{junctionPath.Replace("'", "''")}' -Target " +
+            $"'{targetPath.Replace("'", "''")}' | Out-Null");
+
+        using System.Diagnostics.Process process =
+            System.Diagnostics.Process.Start(startInfo)!;
+
+        process.WaitForExit();
+        Assert.Equal(0, process.ExitCode);
+    }
+
+    [Fact]
     public void Build_IncludesFileNamesContentsAndUserPrompt()
     {
         RepositoryContextFile file =
