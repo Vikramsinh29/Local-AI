@@ -30,6 +30,8 @@ public sealed class MainWindowViewModel :
     private string _repositoryPath = string.Empty;
     private string _repositorySummary =
         "Select a repository to add project context.";
+    private RepositoryTreeItemViewModel? _selectedRepositoryItem;
+    private bool _isRepositoryPanelOpen;
     private bool _isBusy;
     private CancellationTokenSource? _requestCancellation;
 
@@ -42,10 +44,12 @@ public sealed class MainWindowViewModel :
             throw new ArgumentNullException(nameof(ollamaClient));
 
         _folderPickerService = folderPickerService ??
-            throw new ArgumentNullException(nameof(folderPickerService));
+            throw new ArgumentNullException(
+                nameof(folderPickerService));
 
         _repositoryInspector = repositoryInspector ??
-            throw new ArgumentNullException(nameof(repositoryInspector));
+            throw new ArgumentNullException(
+                nameof(repositoryInspector));
 
         RefreshModelsCommand = new AsyncRelayCommand(
             RefreshModelsAsync,
@@ -54,6 +58,13 @@ public sealed class MainWindowViewModel :
         BrowseRepositoryCommand = new AsyncRelayCommand(
             SelectRepositoryAsync,
             () => !IsBusy);
+
+        RefreshRepositoryCommand = new AsyncRelayCommand(
+            RefreshRepositoryAsync,
+            CanRefreshRepository);
+
+        ToggleRepositoryPanelCommand = new RelayCommand(
+            ToggleRepositoryPanel);
 
         SendCommand = new AsyncRelayCommand(
             SendAsync,
@@ -81,11 +92,18 @@ public sealed class MainWindowViewModel :
 
     public ObservableCollection<ChatMessageViewModel> Messages { get; } = [];
 
-    public ObservableCollection<string> RepositoryItems { get; } = [];
+    public ObservableCollection<RepositoryTreeItemViewModel> RepositoryTree
+    {
+        get;
+    } = [];
 
     public AsyncRelayCommand RefreshModelsCommand { get; }
 
     public AsyncRelayCommand BrowseRepositoryCommand { get; }
+
+    public AsyncRelayCommand RefreshRepositoryCommand { get; }
+
+    public RelayCommand ToggleRepositoryPanelCommand { get; }
 
     public AsyncRelayCommand SendCommand { get; }
 
@@ -138,13 +156,32 @@ public sealed class MainWindowViewModel :
     public string RepositoryPath
     {
         get => _repositoryPath;
-        private set => SetField(ref _repositoryPath, value);
+        private set
+        {
+            if (SetField(ref _repositoryPath, value))
+            {
+                RefreshRepositoryCommand
+                    .NotifyCanExecuteChanged();
+            }
+        }
     }
 
     public string RepositorySummary
     {
         get => _repositorySummary;
         private set => SetField(ref _repositorySummary, value);
+    }
+
+    public RepositoryTreeItemViewModel? SelectedRepositoryItem
+    {
+        get => _selectedRepositoryItem;
+        set => SetField(ref _selectedRepositoryItem, value);
+    }
+
+    public bool IsRepositoryPanelOpen
+    {
+        get => _isRepositoryPanelOpen;
+        set => SetField(ref _isRepositoryPanelOpen, value);
     }
 
     public bool IsBusy
@@ -161,6 +198,7 @@ public sealed class MainWindowViewModel :
 
             RefreshModelsCommand.NotifyCanExecuteChanged();
             BrowseRepositoryCommand.NotifyCanExecuteChanged();
+            RefreshRepositoryCommand.NotifyCanExecuteChanged();
             SendCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
             NewChatCommand.NotifyCanExecuteChanged();
@@ -188,7 +226,7 @@ public sealed class MainWindowViewModel :
                 """
                 Welcome to LocalForge AI.
 
-                Select a repository from the sidebar or start a local conversation.
+                Select a repository from the sidebar or begin a local conversation.
                 Your prompts and source code remain on this computer.
                 """));
     }
@@ -200,6 +238,17 @@ public sealed class MainWindowViewModel :
         ElapsedText = string.Empty;
         StatusText = "New conversation started.";
         AddWelcomeMessage();
+    }
+
+    private void ToggleRepositoryPanel()
+    {
+        IsRepositoryPanelOpen = !IsRepositoryPanelOpen;
+    }
+
+    private bool CanRefreshRepository()
+    {
+        return !IsBusy &&
+               Directory.Exists(RepositoryPath);
     }
 
     private async Task SelectRepositoryAsync()
@@ -217,49 +266,67 @@ public sealed class MainWindowViewModel :
             return;
         }
 
+        await LoadRepositoryAsync(selectedFolder);
+    }
+
+    private async Task RefreshRepositoryAsync()
+    {
+        if (!Directory.Exists(RepositoryPath))
+        {
+            return;
+        }
+
+        await LoadRepositoryAsync(RepositoryPath);
+    }
+
+    private async Task LoadRepositoryAsync(string repositoryPath)
+    {
         IsBusy = true;
         StatusText = "Inspecting repository...";
 
         try
         {
             RepositoryInfo repository =
-                await _repositoryInspector.InspectAsync(selectedFolder);
+                await _repositoryInspector.InspectAsync(
+                    repositoryPath);
 
             RepositoryPath = repository.RootPath;
+
             RepositoryName =
-                Path.GetFileName(repository.RootPath.TrimEnd(
-                    Path.DirectorySeparatorChar,
-                    Path.AltDirectorySeparatorChar));
-
-            RepositoryItems.Clear();
-
-            foreach (string solution in repository.SolutionFiles)
-            {
-                RepositoryItems.Add($"Solution: {solution}");
-            }
-
-            foreach (string project in repository.ProjectFiles)
-            {
-                RepositoryItems.Add($"Project: {project}");
-            }
-
-            string gitText = repository.IsGitRepository
-                ? "Git repository"
-                : "Not a Git repository";
+                new DirectoryInfo(repository.RootPath).Name;
 
             RepositorySummary =
-                $"{gitText} • " +
+                $"{(repository.IsGitRepository ? "Git repository" : "Not a Git repository")} • " +
                 $"{repository.SolutionFiles.Count} solution file(s) • " +
                 $"{repository.ProjectFiles.Count} project file(s)";
 
-            StatusText = $"Repository selected: {RepositoryName}";
+            RepositoryTree.Clear();
+
+            foreach (RepositoryTreeNode rootEntry in
+                     repository.RootEntries)
+            {
+                RepositoryTree.Add(
+                    new RepositoryTreeItemViewModel(
+                        rootEntry));
+            }
+
+            SelectedRepositoryItem =
+                RepositoryTree.FirstOrDefault();
+
+            IsRepositoryPanelOpen = true;
+
+            StatusText =
+                $"Repository selected: {RepositoryName}";
         }
         catch (Exception exception)
         {
             RepositoryName = "Repository unavailable";
-            RepositoryPath = selectedFolder;
+            RepositoryPath = repositoryPath;
             RepositorySummary = exception.Message;
-            RepositoryItems.Clear();
+
+            RepositoryTree.Clear();
+            SelectedRepositoryItem = null;
+
             StatusText = "Repository inspection failed.";
         }
         finally
@@ -282,8 +349,10 @@ public sealed class MainWindowViewModel :
             {
                 Models.Clear();
                 SelectedModel = null;
+
                 StatusText =
                     "Ollama is unavailable at 127.0.0.1:11434.";
+
                 return;
             }
 
@@ -313,7 +382,9 @@ public sealed class MainWindowViewModel :
         {
             Models.Clear();
             SelectedModel = null;
-            StatusText = $"Ollama connection failed: {exception.Message}";
+
+            StatusText =
+                $"Ollama connection failed: {exception.Message}";
         }
         finally
         {
@@ -353,7 +424,8 @@ public sealed class MainWindowViewModel :
         Messages.Add(assistantMessage);
 
         _requestCancellation?.Dispose();
-        _requestCancellation = new CancellationTokenSource();
+        _requestCancellation =
+            new CancellationTokenSource();
 
         IsBusy = true;
         ElapsedText = "00:00.0";
@@ -373,6 +445,7 @@ public sealed class MainWindowViewModel :
                     _requestCancellation.Token))
             {
                 responseBuilder.Append(chunk);
+
                 assistantMessage.Content =
                     responseBuilder.ToString();
             }
@@ -381,9 +454,11 @@ public sealed class MainWindowViewModel :
         }
         catch (OperationCanceledException)
         {
-            if (string.IsNullOrWhiteSpace(assistantMessage.Content))
+            if (string.IsNullOrWhiteSpace(
+                assistantMessage.Content))
             {
-                assistantMessage.Content = "Request cancelled.";
+                assistantMessage.Content =
+                    "Request cancelled.";
             }
 
             StatusText = "Request cancelled.";
@@ -394,7 +469,8 @@ public sealed class MainWindowViewModel :
                 $"Ollama connection error:{Environment.NewLine}" +
                 exception.Message;
 
-            StatusText = "Connection to Ollama was lost.";
+            StatusText =
+                "Connection to Ollama was lost.";
         }
         catch (Exception exception)
         {
@@ -460,7 +536,9 @@ public sealed class MainWindowViewModel :
         T value,
         [CallerMemberName] string? propertyName = null)
     {
-        if (EqualityComparer<T>.Default.Equals(field, value))
+        if (EqualityComparer<T>.Default.Equals(
+            field,
+            value))
         {
             return false;
         }

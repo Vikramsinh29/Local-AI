@@ -1,18 +1,32 @@
 ﻿<Window x:Class="LocalForge.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:LocalForge.Desktop.ViewModels"
         Title="LocalForge AI"
-        Width="1200"
-        Height="820"
-        MinWidth="900"
-        MinHeight="620"
+        Width="1320"
+        Height="840"
+        MinWidth="960"
+        MinHeight="640"
         WindowStartupLocation="CenterScreen"
         Background="#F7F7F8">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter
+            x:Key="BooleanToVisibilityConverter"/>
+
+        <HierarchicalDataTemplate
+            DataType="{x:Type vm:RepositoryTreeItemViewModel}"
+            ItemsSource="{Binding Children}">
+            <TextBlock Padding="3"
+                       Text="{Binding Name}"/>
+        </HierarchicalDataTemplate>
+    </Window.Resources>
 
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="250"/>
             <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
 
         <!-- Sidebar -->
@@ -60,26 +74,21 @@
                             Command="{Binding BrowseRepositoryCommand}"
                             Content="Select repository"/>
 
-                    <TextBlock Margin="12,8,12,2"
-                               FontWeight="SemiBold"
-                               Foreground="White"
-                               TextTrimming="CharacterEllipsis"
-                               Text="{Binding RepositoryName}"/>
+                    <Button Margin="0,4,0,0"
+                            Padding="12,7"
+                            HorizontalContentAlignment="Left"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Foreground="White"
+                            Command="{Binding ToggleRepositoryPanelCommand}"
+                            Content="{Binding RepositoryName}"/>
 
-                    <TextBlock Margin="12,0,12,12"
+                    <TextBlock Margin="12,2,12,12"
                                FontSize="11"
                                Foreground="#AFAFAF"
                                TextWrapping="Wrap"
                                Text="{Binding RepositorySummary}"/>
                 </StackPanel>
-
-                <ListBox Grid.Row="3"
-                         Margin="6,4"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         Foreground="#D5D5D5"
-                         FontSize="11"
-                         ItemsSource="{Binding RepositoryItems}"/>
 
                 <StackPanel Grid.Row="4"
                             Margin="8,10">
@@ -90,12 +99,13 @@
                     <TextBlock Margin="0,4,0,0"
                                Foreground="#7FC58A"
                                FontSize="11"
+                               TextWrapping="Wrap"
                                Text="{Binding StatusText}"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Main chat area -->
+        <!-- Main chat -->
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="64"/>
@@ -103,7 +113,6 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- Top bar -->
             <Border Grid.Row="0"
                     Background="White"
                     BorderBrush="#E5E5E5"
@@ -129,6 +138,13 @@
                     <StackPanel Grid.Column="1"
                                 VerticalAlignment="Center"
                                 Orientation="Horizontal">
+                        <Button Height="34"
+                                MinWidth="130"
+                                Margin="0,0,10,0"
+                                Padding="12,5"
+                                Command="{Binding ToggleRepositoryPanelCommand}"
+                                Content="{Binding RepositoryName}"/>
+
                         <ComboBox Width="210"
                                   Height="34"
                                   Margin="0,0,10,0"
@@ -144,7 +160,6 @@
                 </Grid>
             </Border>
 
-            <!-- Conversation -->
             <ScrollViewer x:Name="ConversationScrollViewer"
                           Grid.Row="1"
                           Padding="30,24"
@@ -199,7 +214,6 @@
                 </ItemsControl>
             </ScrollViewer>
 
-            <!-- Composer -->
             <Grid Grid.Row="2"
                   Margin="28,10,28,22">
                 <Border Padding="14"
@@ -214,7 +228,6 @@
                         </Grid.RowDefinitions>
 
                         <TextBox x:Name="MessageInputTextBox"
-                                 Grid.Row="0"
                                  MinHeight="54"
                                  MaxHeight="160"
                                  Padding="4"
@@ -280,5 +293,129 @@
                 </ProgressBar>
             </Grid>
         </Grid>
+
+        <!-- Repository panel -->
+        <Border Grid.Column="2"
+                Width="360"
+                Background="White"
+                BorderBrush="#E1E1E1"
+                BorderThickness="1,0,0,0"
+                Visibility="{Binding IsRepositoryPanelOpen,
+                    Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0"
+                      Margin="16,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel>
+                        <TextBlock FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Text="{Binding RepositoryName}"/>
+
+                        <TextBlock Margin="0,3,0,0"
+                                   FontSize="10"
+                                   Foreground="#777777"
+                                   TextTrimming="CharacterEllipsis"
+                                   Text="{Binding RepositoryPath}"/>
+                    </StackPanel>
+
+                    <Button Grid.Column="1"
+                            Width="32"
+                            Height="32"
+                            Command="{Binding ToggleRepositoryPanelCommand}"
+                            Content="✕"/>
+                </Grid>
+
+                <Grid Grid.Row="1"
+                      Margin="16,0,16,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock VerticalAlignment="Center"
+                               FontSize="11"
+                               Foreground="#666666"
+                               TextWrapping="Wrap"
+                               Text="{Binding RepositorySummary}"/>
+
+                    <Button Grid.Column="1"
+                            Margin="10,0,0,0"
+                            Padding="12,5"
+                            Command="{Binding RefreshRepositoryCommand}"
+                            Content="Refresh"/>
+                </Grid>
+
+                <TreeView x:Name="RepositoryTree"
+                          Grid.Row="2"
+                          Margin="12,0"
+                          Padding="6"
+                          BorderBrush="#E1E1E1"
+                          BorderThickness="1"
+                          ItemsSource="{Binding RepositoryTree}"
+                          SelectedItemChanged="RepositoryTree_SelectedItemChanged"/>
+
+                <Border Grid.Row="3"
+                        Margin="12"
+                        Padding="14"
+                        Background="#F7F7F8"
+                        CornerRadius="10">
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="{Binding SelectedRepositoryItem.Name}"/>
+
+                        <TextBlock Margin="0,8,0,0"
+                                   FontSize="11"
+                                   Foreground="#666666"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding SelectedRepositoryItem.RelativePath}"/>
+
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock FontWeight="SemiBold"
+                                       Text="Type:"/>
+
+                            <TextBlock Grid.Column="1"
+                                       Margin="12,0,0,0"
+                                       Text="{Binding SelectedRepositoryItem.TypeText}"/>
+
+                            <TextBlock Grid.Row="1"
+                                       Margin="0,7,0,0"
+                                       FontWeight="SemiBold"
+                                       Text="Size:"/>
+
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="1"
+                                       Margin="12,7,0,0"
+                                       Text="{Binding SelectedRepositoryItem.SizeText}"/>
+
+                            <TextBlock Grid.Row="2"
+                                       Margin="0,7,0,0"
+                                       FontWeight="SemiBold"
+                                       Text="Modified:"/>
+
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="1"
+                                       Margin="12,7,0,0"
+                                       Text="{Binding SelectedRepositoryItem.ModifiedText}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

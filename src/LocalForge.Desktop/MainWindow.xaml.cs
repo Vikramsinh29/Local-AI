@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using LocalForge.Desktop.Services;
 using LocalForge.Desktop.ViewModels;
@@ -64,5 +65,13 @@ public partial class MainWindow : Window
         EventArgs e)
     {
         ConversationScrollViewer.ScrollToEnd();
+    }
+
+    private void RepositoryTree_SelectedItemChanged(
+        object sender,
+        RoutedPropertyChangedEventArgs<object> e)
+    {
+        _viewModel.SelectedRepositoryItem =
+            e.NewValue as RepositoryTreeItemViewModel;
     }
 }

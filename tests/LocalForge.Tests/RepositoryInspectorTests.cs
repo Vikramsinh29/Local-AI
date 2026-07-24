@@ -1,5 +1,5 @@
-﻿using LocalForge.Infrastructure.Repositories;
-using Xunit;
+﻿using LocalForge.Core.Models;
+using LocalForge.Infrastructure.Repositories;
 
 namespace LocalForge.Tests;
 
@@ -17,16 +17,23 @@ public sealed class RepositoryInspectorTests : IDisposable
     }
 
     [Fact]
-    public async Task InspectAsync_DetectsGitSolutionAndProjects()
+    public async Task InspectAsync_DetectsProjectsAndBuildsTree()
     {
         Directory.CreateDirectory(
             Path.Combine(_temporaryDirectory, ".git"));
 
-        Directory.CreateDirectory(
-            Path.Combine(_temporaryDirectory, "src", "Sample.App"));
+        string projectDirectory = Path.Combine(
+            _temporaryDirectory,
+            "src",
+            "Sample.App");
 
-        Directory.CreateDirectory(
-            Path.Combine(_temporaryDirectory, "obj"));
+        Directory.CreateDirectory(projectDirectory);
+
+        string ignoredDirectory = Path.Combine(
+            _temporaryDirectory,
+            "obj");
+
+        Directory.CreateDirectory(ignoredDirectory);
 
         await File.WriteAllTextAsync(
             Path.Combine(_temporaryDirectory, "Sample.slnx"),
@@ -34,23 +41,27 @@ public sealed class RepositoryInspectorTests : IDisposable
 
         await File.WriteAllTextAsync(
             Path.Combine(
-                _temporaryDirectory,
-                "src",
-                "Sample.App",
+                projectDirectory,
                 "Sample.App.csproj"),
             string.Empty);
 
         await File.WriteAllTextAsync(
             Path.Combine(
-                _temporaryDirectory,
-                "obj",
+                projectDirectory,
+                "Program.cs"),
+            "Console.WriteLine(\"Hello\");");
+
+        await File.WriteAllTextAsync(
+            Path.Combine(
+                ignoredDirectory,
                 "Ignored.csproj"),
             string.Empty);
 
         RepositoryInspector inspector = new();
 
-        var result =
-            await inspector.InspectAsync(_temporaryDirectory);
+        RepositoryInfo result =
+            await inspector.InspectAsync(
+                _temporaryDirectory);
 
         Assert.True(result.IsGitRepository);
 
@@ -66,6 +77,29 @@ public sealed class RepositoryInspectorTests : IDisposable
                     "Sample.App.csproj")
             ],
             result.ProjectFiles);
+
+        List<RepositoryTreeNode> flattened =
+            Flatten(result.RootEntries).ToList();
+
+        Assert.Contains(
+            flattened,
+            entry =>
+                entry.RelativePath.Equals(
+                    Path.Combine(
+                        "src",
+                        "Sample.App",
+                        "Program.cs"),
+                    StringComparison.OrdinalIgnoreCase));
+
+        Assert.DoesNotContain(
+            flattened,
+            entry =>
+                entry.RelativePath.Contains(
+                    $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                    StringComparison.OrdinalIgnoreCase) ||
+                entry.RelativePath.StartsWith(
+                    $"obj{Path.DirectorySeparatorChar}",
+                    StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -77,17 +111,35 @@ public sealed class RepositoryInspectorTests : IDisposable
 
         RepositoryInspector inspector = new();
 
-        var result =
-            await inspector.InspectAsync(_temporaryDirectory);
+        RepositoryInfo result =
+            await inspector.InspectAsync(
+                _temporaryDirectory);
 
         Assert.True(result.IsGitRepository);
+    }
+
+    private static IEnumerable<RepositoryTreeNode> Flatten(
+        IEnumerable<RepositoryTreeNode> nodes)
+    {
+        foreach (RepositoryTreeNode node in nodes)
+        {
+            yield return node;
+
+            foreach (RepositoryTreeNode child in
+                     Flatten(node.Children))
+            {
+                yield return child;
+            }
+        }
     }
 
     public void Dispose()
     {
         try
         {
-            Directory.Delete(_temporaryDirectory, recursive: true);
+            Directory.Delete(
+                _temporaryDirectory,
+                recursive: true);
         }
         catch
         {
