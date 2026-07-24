@@ -635,18 +635,20 @@ public sealed class MainWindowViewModel :
         }
         catch (HttpRequestException exception)
         {
-            assistantMessage.Content =
-                $"Ollama connection error:{Environment.NewLine}" +
-                exception.Message;
+            PreservePartialResponse(
+                assistantMessage,
+                "Ollama connection error",
+                exception.Message);
 
             StatusText =
                 "Connection to Ollama was lost.";
         }
         catch (Exception exception)
         {
-            assistantMessage.Content =
-                $"Generation error:{Environment.NewLine}" +
-                exception.Message;
+            PreservePartialResponse(
+                assistantMessage,
+                "Generation error",
+                exception.Message);
 
             StatusText = "Generation failed.";
         }
@@ -661,6 +663,21 @@ public sealed class MainWindowViewModel :
             _requestCancellation?.Dispose();
             _requestCancellation = null;
         }
+    }
+
+    private static void PreservePartialResponse(
+        ChatMessageViewModel assistantMessage,
+        string errorKind,
+        string errorMessage)
+    {
+        string error =
+            $"{errorKind}:{Environment.NewLine}{errorMessage}";
+
+        assistantMessage.Content =
+            string.IsNullOrWhiteSpace(assistantMessage.Content)
+                ? error
+                : $"{assistantMessage.Content}{Environment.NewLine}" +
+                  $"{Environment.NewLine}{error}";
     }
 
     private void Cancel()
