@@ -7,6 +7,8 @@ namespace LocalForge.Infrastructure.Ollama;
 
 public sealed class OllamaClient : IOllamaClient, IDisposable
 {
+    private const string GenerationKeepAlive = "30m";
+
     private static readonly JsonSerializerOptions JsonOptions =
         new(JsonSerializerDefaults.Web);
 
@@ -82,7 +84,8 @@ public sealed class OllamaClient : IOllamaClient, IDisposable
         GenerateRequest body = new(
             Model: model,
             Prompt: prompt,
-            Stream: true);
+            Stream: true,
+            KeepAlive: GenerationKeepAlive);
 
         using HttpRequestMessage request =
             new(HttpMethod.Post, "api/generate")
@@ -155,7 +158,10 @@ public sealed class OllamaClient : IOllamaClient, IDisposable
     private sealed record GenerateRequest(
         string Model,
         string Prompt,
-        bool Stream);
+        bool Stream,
+        [property: System.Text.Json.Serialization.JsonPropertyName(
+            "keep_alive")]
+        string KeepAlive);
 
     private sealed record GenerateStreamResponse(
         string? Response,

@@ -93,6 +93,36 @@ public sealed class OllamaClientTests
     }
 
     [Fact]
+    public async Task StreamGenerateAsync_KeepsSelectedModelWarm()
+    {
+        string? requestJson = null;
+
+        using HttpClient httpClient = CreateHttpClient(
+            (request, _) =>
+            {
+                requestJson = request.Content!
+                    .ReadAsStringAsync()
+                    .GetAwaiter()
+                    .GetResult();
+
+                return CreateStreamingResponse(
+                    """{"response":"","done":true}""");
+            });
+        using OllamaClient client = new(httpClient);
+
+        await ReadAllChunksAsync(client);
+
+        using JsonDocument request =
+            JsonDocument.Parse(requestJson!);
+
+        Assert.Equal(
+            "30m",
+            request.RootElement
+                .GetProperty("keep_alive")
+                .GetString());
+    }
+
+    [Fact]
     public async Task StreamGenerateAsync_ThrowsForHttpError()
     {
         using HttpClient httpClient = CreateHttpClient(
