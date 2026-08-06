@@ -1,0 +1,8 @@
+namespace LocalAI.Core.Models;
+
+public sealed record RepositoryInfo(
+    string RootPath,
+    bool IsGitRepository,
+    IReadOnlyList<string> SolutionFiles,
+    IReadOnlyList<string> ProjectFiles,
+    IReadOnlyList<RepositoryTreeNode> RootEntries);

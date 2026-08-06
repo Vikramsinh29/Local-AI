@@ -1,11 +1,11 @@
-# LocalForge AI - Agent Development Rules
+# Local AI - Agent Development Rules
 
 ## Purpose
 
 This file is the authoritative operating guide for AI coding agents working in
 this repository. Read it before inspecting, planning, or changing code.
 
-LocalForge AI is a completely local Windows coding assistant. It uses Ollama
+Local AI is a completely local Windows coding assistant. It uses Ollama
 and must not require paid API tokens or send prompts, source code, repository
 content, telemetry, or credentials to external AI services.
 
@@ -16,14 +16,14 @@ content, telemetry, or credentials to external AI services.
 - Desktop UI: WPF
 - Architecture: MVVM
 - Local model runtime: Ollama at `http://127.0.0.1:11434`
-- Solution: `LocalForgeAI.slnx`
-- Core project: `src/LocalForge.Core`
-- Infrastructure project: `src/LocalForge.Infrastructure`
-- Desktop project: `src/LocalForge.Desktop`
-- Tests: `tests/LocalForge.Tests`
+- Solution: `LocalAI.slnx`
+- Core project: `src/LocalAI.Core`
+- Infrastructure project: `src/LocalAI.Infrastructure`
+- Desktop project: `src/LocalAI.Desktop`
+- Tests: `tests/LocalAI.Tests`
 - Shell: PowerShell
 
-Never use another project, including MediaForge, as the LocalForge repository.
+Never use another project, including MediaForge, as the LocalAI repository.
 
 ## Instruction Priority
 
@@ -41,9 +41,9 @@ work and report the exact conflict.
 - Preserve the existing WPF and MVVM architecture.
 - Keep views focused on presentation and binding.
 - Keep UI coordination and observable state in ViewModels.
-- Put contracts and shared models in `LocalForge.Core`.
+- Put contracts and shared models in `LocalAI.Core`.
 - Put Ollama, repository, file-system, and other external implementations in
-  `LocalForge.Infrastructure`.
+  `LocalAI.Infrastructure`.
 - Make ViewModels depend on interfaces rather than concrete infrastructure
   implementations.
 - Keep code-behind limited to view-specific behavior that cannot be expressed
@@ -57,10 +57,10 @@ work and report the exact conflict.
 Dependency direction must remain:
 
 ```text
-LocalForge.Desktop -> LocalForge.Core
-LocalForge.Desktop -> LocalForge.Infrastructure (composition only)
-LocalForge.Infrastructure -> LocalForge.Core
-LocalForge.Core -> no Desktop or Infrastructure dependency
+LocalAI.Desktop -> LocalAI.Core
+LocalAI.Desktop -> LocalAI.Infrastructure (composition only)
+LocalAI.Infrastructure -> LocalAI.Core
+LocalAI.Core -> no Desktop or Infrastructure dependency
 ```
 
 ## Local-First and Repository Safety
@@ -72,7 +72,7 @@ LocalForge.Core -> no Desktop or Infrastructure dependency
   local paths to external services.
 - Repository inspection and context collection are read-only unless a future
   sprint explicitly adds a reviewed editing capability.
-- Never edit files in a repository selected through the LocalForge UI as part
+- Never edit files in a repository selected through the LocalAI UI as part
   of repository inspection or context collection.
 - Never execute commands inside a user-selected repository through read-only
   repository features.
@@ -128,8 +128,8 @@ Run these PowerShell commands before changing code:
 ```powershell
 git status
 git branch --show-current
-dotnet build LocalForgeAI.slnx -c Release
-dotnet test LocalForgeAI.slnx -c Release --no-build
+dotnet build LocalAI.slnx -c Release
+dotnet test LocalAI.slnx -c Release --no-build
 ```
 
 Do not build on top of unexplained changes. Preserve user-owned changes and
@@ -168,8 +168,8 @@ never discard them.
 Run:
 
 ```powershell
-dotnet build LocalForgeAI.slnx -c Release
-dotnet test LocalForgeAI.slnx -c Release --no-build
+dotnet build LocalAI.slnx -c Release
+dotnet test LocalAI.slnx -c Release --no-build
 git diff --check
 git status --short
 ```

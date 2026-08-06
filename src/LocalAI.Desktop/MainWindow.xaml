@@ -1,0 +1,497 @@
+<Window x:Class="LocalAI.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:LocalAI.Desktop.ViewModels"
+        Title="Local AI"
+        Width="1320"
+        Height="840"
+        MinWidth="960"
+        MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Background="#F7F7F8">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter
+            x:Key="BooleanToVisibilityConverter"/>
+
+        <HierarchicalDataTemplate
+            DataType="{x:Type vm:RepositoryTreeItemViewModel}"
+            ItemsSource="{Binding Children}">
+            <TextBlock Padding="3"
+                       Text="{Binding Name}"/>
+        </HierarchicalDataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Sidebar -->
+        <Border Grid.Column="0"
+                Background="#171717">
+            <Grid Margin="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0"
+                           Margin="10,12,10,20"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           Foreground="White"
+                           Text="Local AI"/>
+
+                <Button Grid.Row="1"
+                        Height="42"
+                        Margin="0,0,0,18"
+                        Padding="14,8"
+                        HorizontalContentAlignment="Left"
+                        Background="#2A2A2A"
+                        BorderBrush="#444444"
+                        Foreground="White"
+                        Command="{Binding NewChatCommand}"
+                        Content="+  New chat"/>
+
+                <StackPanel Grid.Row="2">
+                    <TextBlock Margin="10,0,10,8"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Foreground="#AFAFAF"
+                               Text="REPOSITORY"/>
+
+                    <Button Padding="12,9"
+                            HorizontalContentAlignment="Left"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Foreground="White"
+                            Command="{Binding BrowseRepositoryCommand}"
+                            Content="Select repository"/>
+
+                    <Button Margin="0,4,0,0"
+                            Padding="12,7"
+                            HorizontalContentAlignment="Left"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Foreground="White"
+                            Command="{Binding ToggleRepositoryPanelCommand}"
+                            Content="{Binding RepositoryName}"/>
+
+                    <TextBlock Margin="12,2,12,12"
+                               FontSize="11"
+                               Foreground="#AFAFAF"
+                               TextWrapping="Wrap"
+                               Text="{Binding RepositorySummary}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="4"
+                            Margin="8,10">
+                    <TextBlock Foreground="#AFAFAF"
+                               FontSize="11"
+                               Text="Local processing"/>
+
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="#7FC58A"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="{Binding StatusText}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main chat -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="64"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0"
+                    Background="White"
+                    BorderBrush="#E5E5E5"
+                    BorderThickness="0,0,0,1">
+                <Grid Margin="22,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="#202123"
+                                   Text="Local conversation"/>
+
+                        <TextBlock Margin="0,3,0,0"
+                                   FontSize="11"
+                                   Foreground="#777777"
+                                   Text="{Binding ElapsedText}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal">
+                        <Button Height="34"
+                                MinWidth="130"
+                                Margin="0,0,10,0"
+                                Padding="12,5"
+                                Command="{Binding ToggleRepositoryPanelCommand}"
+                                Content="{Binding RepositoryName}"/>
+
+                        <ComboBox Width="210"
+                                  Height="34"
+                                  Margin="0,0,10,0"
+                                  ItemsSource="{Binding Models}"
+                                  SelectedItem="{Binding SelectedModel}"
+                                  IsEnabled="{Binding IsNotBusy}"/>
+
+                        <ComboBox Width="105"
+                                  Height="34"
+                                  Margin="0,0,10,0"
+                                  DisplayMemberPath="Name"
+                                  ItemsSource="{Binding AvailableGenerationProfiles}"
+                                  SelectedItem="{Binding SelectedGenerationProfile}"
+                                  IsEnabled="{Binding IsNotBusy}"/>
+
+                        <Button Width="76"
+                                Height="34"
+                                Command="{Binding RefreshModelsCommand}"
+                                Content="Refresh"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <ScrollViewer x:Name="ConversationScrollViewer"
+                          Grid.Row="1"
+                          Padding="30,24"
+                          VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="ConversationItems"
+                              ItemsSource="{Binding Messages}"
+                              LayoutUpdated="ConversationItems_LayoutUpdated">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border x:Name="MessageBubble"
+                                    MaxWidth="760"
+                                    Margin="0,0,0,18"
+                                    Padding="18,14"
+                                    HorizontalAlignment="Left"
+                                    Background="#F0F0F0"
+                                    CornerRadius="14">
+                                <StackPanel>
+                                    <TextBlock FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="#555555"
+                                               Text="{Binding Author}"/>
+
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontSize="14"
+                                               LineHeight="22"
+                                               TextWrapping="Wrap"
+                                               Foreground="#202123"
+                                               Text="{Binding Content}"/>
+
+                                    <TextBlock Margin="0,9,0,0"
+                                               HorizontalAlignment="Right"
+                                               FontSize="10"
+                                               Foreground="#888888"
+                                               Text="{Binding Timestamp}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsUser}"
+                                             Value="True">
+                                    <Setter TargetName="MessageBubble"
+                                            Property="HorizontalAlignment"
+                                            Value="Right"/>
+
+                                    <Setter TargetName="MessageBubble"
+                                            Property="Background"
+                                            Value="#E7EDF7"/>
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <Grid Grid.Row="2"
+                  Margin="28,10,28,22">
+                <Border Padding="14"
+                        Background="White"
+                        BorderBrush="#D7D7D7"
+                        BorderThickness="1"
+                        CornerRadius="18">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Margin="4,0,4,8"
+                                   FontSize="10"
+                                   Foreground="#666666"
+                                   Text="{Binding ContextSizeText}"/>
+
+                        <TextBox x:Name="MessageInputTextBox"
+                                 Grid.Row="1"
+                                 MinHeight="54"
+                                 MaxHeight="160"
+                                 Padding="4"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 FontSize="14"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 PreviewKeyDown="MessageInputTextBox_PreviewKeyDown"
+                                 Text="{Binding MessageInput,
+                                                UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <Grid Grid.Row="2"
+                              Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock VerticalAlignment="Center"
+                                       FontSize="10"
+                                       Foreground="#888888"
+                                       Text="Enter to send • Shift+Enter for new line"/>
+
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal">
+                                <Button Width="72"
+                                        Height="34"
+                                        Margin="0,0,8,0"
+                                        Command="{Binding CancelCommand}"
+                                        Content="Stop"/>
+
+                                <Button Width="72"
+                                        Height="34"
+                                        Background="#202123"
+                                        Foreground="White"
+                                        Command="{Binding SendCommand}"
+                                        Content="Send"/>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <ProgressBar Height="3"
+                             Margin="18,-3,18,0"
+                             VerticalAlignment="Top"
+                             IsIndeterminate="{Binding IsBusy}">
+                    <ProgressBar.Style>
+                        <Style TargetType="ProgressBar">
+                            <Setter Property="Opacity"
+                                    Value="0"/>
+
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsBusy}"
+                                             Value="True">
+                                    <Setter Property="Opacity"
+                                            Value="1"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ProgressBar.Style>
+                </ProgressBar>
+            </Grid>
+        </Grid>
+
+        <!-- Repository panel -->
+        <Border Grid.Column="2"
+                Width="360"
+                Background="White"
+                BorderBrush="#E1E1E1"
+                BorderThickness="1,0,0,0"
+                Visibility="{Binding IsRepositoryPanelOpen,
+                    Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="180"/>
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0"
+                      Margin="16,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel>
+                        <TextBlock FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Text="{Binding RepositoryName}"/>
+
+                        <TextBlock Margin="0,3,0,0"
+                                   FontSize="10"
+                                   Foreground="#777777"
+                                   TextTrimming="CharacterEllipsis"
+                                   Text="{Binding RepositoryPath}"/>
+                    </StackPanel>
+
+                    <Button Grid.Column="1"
+                            Width="32"
+                            Height="32"
+                            Command="{Binding ToggleRepositoryPanelCommand}"
+                            Content="✕"/>
+                </Grid>
+
+                <Grid Grid.Row="1"
+                      Margin="16,0,16,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock VerticalAlignment="Center"
+                               FontSize="11"
+                               Foreground="#666666"
+                               TextWrapping="Wrap"
+                               Text="{Binding RepositorySummary}"/>
+
+                    <Button Grid.Column="1"
+                            Margin="10,0,0,0"
+                            Padding="12,5"
+                            Command="{Binding RefreshRepositoryCommand}"
+                            Content="Refresh"/>
+                </Grid>
+
+                <TreeView x:Name="RepositoryTree"
+                          Grid.Row="2"
+                          Margin="12,0"
+                          Padding="6"
+                          BorderBrush="#E1E1E1"
+                          BorderThickness="1"
+                          ItemsSource="{Binding RepositoryTree}"
+                          SelectedItemChanged="RepositoryTree_SelectedItemChanged"/>
+
+                <Border Grid.Row="3"
+                        Margin="12"
+                        Padding="14"
+                        Background="#F7F7F8"
+                        CornerRadius="10">
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="{Binding SelectedRepositoryItem.Name}"/>
+
+                        <TextBlock Margin="0,8,0,0"
+                                   FontSize="11"
+                                   Foreground="#666666"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding SelectedRepositoryItem.RelativePath}"/>
+
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock FontWeight="SemiBold"
+                                       Text="Type:"/>
+
+                            <TextBlock Grid.Column="1"
+                                       Margin="12,0,0,0"
+                                       Text="{Binding SelectedRepositoryItem.TypeText}"/>
+
+                            <TextBlock Grid.Row="1"
+                                       Margin="0,7,0,0"
+                                       FontWeight="SemiBold"
+                                       Text="Size:"/>
+
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="1"
+                                       Margin="12,7,0,0"
+                                       Text="{Binding SelectedRepositoryItem.SizeText}"/>
+
+                            <TextBlock Grid.Row="2"
+                                       Margin="0,7,0,0"
+                                       FontWeight="SemiBold"
+                                       Text="Modified:"/>
+
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="1"
+                                       Margin="12,7,0,0"
+                                       Text="{Binding SelectedRepositoryItem.ModifiedText}"/>
+                        </Grid>
+
+                        <Button Margin="0,12,0,0"
+                                Padding="12,7"
+                                Command="{Binding AddSelectedFileToContextCommand}"
+                                Content="Add file to AI context"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="4"
+                        Margin="12,0,12,12"
+                        Padding="12"
+                        Background="#F7F7F8"
+                        CornerRadius="10">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="Files sent with each prompt"/>
+
+                        <ListBox Grid.Row="1"
+                                 Margin="0,8"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 ItemsSource="{Binding ContextFiles}"
+                                 SelectedItem="{Binding SelectedContextFile}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,3">
+                                        <TextBlock FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Text="{Binding RelativePath}"/>
+                                        <TextBlock FontSize="9"
+                                                   Foreground="#777777"
+                                                   Text="{Binding SizeText}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock VerticalAlignment="Center"
+                                       FontSize="10"
+                                       Foreground="#666666"
+                                       Text="{Binding ContextSizeText}"/>
+
+                            <Button Grid.Column="1"
+                                    Margin="8,0,0,0"
+                                    Padding="10,5"
+                                    Command="{Binding RemoveSelectedContextFileCommand}"
+                                    Content="Remove"/>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
