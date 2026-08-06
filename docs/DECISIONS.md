@@ -1,0 +1,40 @@
+# Local-AI Decision Log
+
+Record a decision here only when it changes future implementation choices.
+Keep entries short and link to a commit or issue when available.
+
+## D-001 — Local-first AI runtime
+
+**Decision:** Use Ollama at `127.0.0.1:11434` for all AI generation.
+
+**Reason:** Local-AI must not send prompts, repository content, credentials, or
+telemetry to external AI services.
+
+## D-002 — WPF and MVVM remain the desktop architecture
+
+**Decision:** Keep the existing .NET 10 WPF/MVVM solution and manual
+composition.
+
+**Reason:** It preserves current behavior and avoids unrelated framework or
+dependency changes.
+
+## D-003 — Repository access begins read-only
+
+**Decision:** The first agent phases may inspect and propose, but may not edit,
+execute modifying commands, commit, or push in a selected repository.
+
+**Reason:** A proposed patch is not trustworthy enough to apply without review.
+
+## D-004 — Evidence before claims
+
+**Decision:** Local-AI must base repository claims on inspected files or shown
+tool output.
+
+**Reason:** This reduces hallucinated files, APIs, build results, and fixes.
+
+## D-005 — Skills are modular Markdown workflows
+
+**Decision:** Use `skills/<name>/SKILL.md` for reusable task workflows.
+
+**Reason:** Versioned, concise workflows are easier to review and less likely
+to conflict than duplicated global instructions or ad-hoc shell scripts.
