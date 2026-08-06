@@ -105,6 +105,28 @@ public sealed class MainWindowViewModelTests
         Assert.False(viewModel.IsBusy);
     }
 
+    [Fact]
+    public void AgentMode_RequiresSelectedRepositoryBeforeSend()
+    {
+        FakeOllamaClient ollama = new(
+            (_, _) => StreamThenFail());
+        using MainWindowViewModel viewModel = CreateViewModel(ollama);
+        viewModel.MessageInput = "Plan this feature.";
+
+        Assert.True(viewModel.SendCommand.CanExecute(null));
+
+        viewModel.IsAgentMode = true;
+
+        Assert.False(viewModel.SendCommand.CanExecute(null));
+        Assert.Contains(
+            "read-only",
+            viewModel.StatusText,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "No source files selected",
+            viewModel.AgentEvidenceText);
+    }
+
     private static MainWindowViewModel CreateViewModel(
         IOllamaClient ollamaClient)
     {

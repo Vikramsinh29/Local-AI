@@ -234,15 +234,52 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <TextBlock Margin="4,0,4,8"
-                                   FontSize="10"
-                                   Foreground="#666666"
-                                   Text="{Binding ContextSizeText}"/>
+                        <Grid Margin="4,0,4,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock VerticalAlignment="Center"
+                                       FontSize="10"
+                                       Foreground="#666666"
+                                       Text="{Binding ContextSizeText}"/>
+
+                            <CheckBox Grid.Column="1"
+                                      VerticalAlignment="Center"
+                                      Content="Agent mode"
+                                      IsChecked="{Binding IsAgentMode}"
+                                      IsEnabled="{Binding IsNotBusy}"/>
+                        </Grid>
+
+                        <Border Grid.Row="1"
+                                Margin="4,0,4,10"
+                                Padding="10,8"
+                                Background="#FFF6DD"
+                                BorderBrush="#E9C96B"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Visibility="{Binding IsAgentMode,
+                                    Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="#654F00"
+                                           Text="Read-only agent • No changes applied"/>
+
+                                <TextBlock Margin="0,4,0,0"
+                                           FontSize="10"
+                                           Foreground="#6B5A1A"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding AgentEvidenceText}"/>
+                            </StackPanel>
+                        </Border>
 
                         <TextBox x:Name="MessageInputTextBox"
-                                 Grid.Row="1"
+                                 Grid.Row="2"
                                  MinHeight="54"
                                  MaxHeight="160"
                                  Padding="4"
@@ -256,7 +293,7 @@
                                  Text="{Binding MessageInput,
                                                 UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <Grid Grid.Row="2"
+                        <Grid Grid.Row="3"
                               Margin="0,10,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>

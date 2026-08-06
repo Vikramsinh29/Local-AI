@@ -37,6 +37,7 @@ public sealed class MainWindowViewModel :
     private RepositoryTreeItemViewModel? _selectedRepositoryItem;
     private RepositoryContextFileViewModel? _selectedContextFile;
     private bool _isRepositoryPanelOpen;
+    private bool _isAgentMode;
     private bool _isBusy;
     private CancellationTokenSource? _requestCancellation;
 
@@ -208,6 +209,8 @@ public sealed class MainWindowViewModel :
             {
                 RefreshRepositoryCommand
                     .NotifyCanExecuteChanged();
+                SendCommand.NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(AgentEvidenceText));
             }
         }
     }
@@ -254,6 +257,46 @@ public sealed class MainWindowViewModel :
         $"{_repositoryFileContextService.MaximumTotalBytes / 1024} KB • " +
         $"~{EstimatedContextTokens:N0} tokens • " +
         $"{SelectedGenerationProfile.Name}";
+
+    public bool IsAgentMode
+    {
+        get => _isAgentMode;
+        set
+        {
+            if (!SetField(ref _isAgentMode, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(AgentEvidenceText));
+            SendCommand.NotifyCanExecuteChanged();
+            StatusText = value
+                ? "Agent mode is read-only. Select a repository " +
+                  "and evidence files."
+                : "Local conversation mode enabled.";
+        }
+    }
+
+    public string AgentEvidenceText
+    {
+        get
+        {
+            if (!IsAgentMode)
+            {
+                return string.Empty;
+            }
+
+            string files = ContextFiles.Count == 0
+                ? "No source files selected."
+                : string.Join(
+                    ", ",
+                    ContextFiles.Select(file => file.RelativePath));
+
+            return $"Repository evidence: {RepositoryName} • " +
+                   $"{RepositorySummary}{Environment.NewLine}" +
+                   $"Source evidence: {files}";
+        }
+    }
 
     public bool IsRepositoryPanelOpen
     {
@@ -395,6 +438,8 @@ public sealed class MainWindowViewModel :
 
             IsRepositoryPanelOpen = true;
 
+            OnPropertyChanged(nameof(AgentEvidenceText));
+
             StatusText =
                 $"Repository selected: {RepositoryName}";
         }
@@ -407,6 +452,7 @@ public sealed class MainWindowViewModel :
             RepositoryTree.Clear();
             SelectedRepositoryItem = null;
             ClearContextFiles();
+            OnPropertyChanged(nameof(AgentEvidenceText));
 
             StatusText = "Repository inspection failed.";
         }
@@ -477,7 +523,8 @@ public sealed class MainWindowViewModel :
     {
         return !IsBusy &&
                !string.IsNullOrWhiteSpace(SelectedModel) &&
-               !string.IsNullOrWhiteSpace(MessageInput);
+               !string.IsNullOrWhiteSpace(MessageInput) &&
+               (!IsAgentMode || Directory.Exists(RepositoryPath));
     }
 
     private bool CanAddSelectedFileToContext()
@@ -550,6 +597,7 @@ public sealed class MainWindowViewModel :
         OnPropertyChanged(nameof(ContextSizeBytes));
         OnPropertyChanged(nameof(EstimatedContextTokens));
         OnPropertyChanged(nameof(ContextSizeText));
+        OnPropertyChanged(nameof(AgentEvidenceText));
         AddSelectedFileToContextCommand.NotifyCanExecuteChanged();
         RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
     }
@@ -567,10 +615,19 @@ public sealed class MainWindowViewModel :
 
         try
         {
-            modelPrompt = RepositoryContextPromptBuilder.Build(
-                prompt,
-                ContextFiles.Select(file => file.File),
-                SelectedGenerationProfile.MaximumRepositoryContextTokens);
+            modelPrompt = IsAgentMode
+                ? AgentPlanPromptBuilder.Build(
+                    prompt,
+                    RepositoryName,
+                    RepositorySummary,
+                    ContextFiles.Select(file => file.File),
+                    SelectedGenerationProfile
+                        .MaximumRepositoryContextTokens)
+                : RepositoryContextPromptBuilder.Build(
+                    prompt,
+                    ContextFiles.Select(file => file.File),
+                    SelectedGenerationProfile
+                        .MaximumRepositoryContextTokens);
         }
         catch (InvalidOperationException exception)
         {
