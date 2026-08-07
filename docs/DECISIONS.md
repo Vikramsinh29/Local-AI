@@ -53,3 +53,21 @@ reviewable. Build/test are still shown as trusted-project operations because
 MSBuild targets can execute project code and write generated output. Build and
 test use the same ignored `.local-ai/verification` artifacts path so they can
 run while the Local-AI desktop process is using its own Release binaries.
+
+## D-007 — Patch proposals use a strict preview-only envelope
+
+**Decision:** Request one delimiter-based `LOCAL_AI_PATCH_V1` response, extract
+one complete marked proposal even when surrounded by plain explanation, reject
+Markdown-wrapped, duplicated, or malformed output instead of repairing it,
+require exact ORIGINAL and
+REPLACEMENT text for a selected evidence file, verify the original appears
+exactly once, construct the displayed diff in Core, and render only an
+in-memory preview.
+
+**Reason:** Small local models are more reliable with a short explicit text
+contract than a deeply nested schema. Having Core construct the diff avoids
+requiring a small model to reproduce platform-specific path separators and hunk
+arithmetic. Evidence matching prevents invented source text from being
+presented as valid. A fallback may normalize leading indentation only when the
+remaining lines match uniquely and preserve their count. Phase 1 deliberately
+contains no apply or repository-write path.

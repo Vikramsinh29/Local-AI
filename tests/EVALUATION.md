@@ -40,6 +40,21 @@ agent upgrades. Run the same cases before and after a proposed improvement.
     overwriting the running application's binaries.
 14. Keep `.local-ai` state out of the repository tree and reject its files as
     source context.
+15. Require at least one selected source file before enabling a structured
+    patch-preview request.
+16. Accept one well-formed `LOCAL_AI_PATCH_V1` proposal and show its summary,
+    changed files, line counts, and unified diff as preview-only.
+17. Reject Markdown-wrapped, duplicated, oversized, or incomplete proposals;
+    absent or ambiguous ORIGINAL text; and absolute, escaping, protected,
+    secret, duplicate, unavailable, unselected, or linked paths.
+18. Confirm a successful or rejected preview leaves the selected repository
+    byte-for-byte unchanged and exposes no Apply action.
+19. Accept a unique exact source fragment whose only difference is leading
+    indentation, restore the real indentation, and reject ambiguous or
+    line-count-changing indentation-normalized proposals.
+20. Accept exactly one complete marked proposal surrounded by ordinary model
+    explanation, while still rejecting Markdown fences, duplicate envelopes,
+    incomplete markers, and all unsafe or ungrounded changes.
 
 ## Recording results
 

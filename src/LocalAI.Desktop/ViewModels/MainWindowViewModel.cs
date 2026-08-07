@@ -45,6 +45,7 @@ public sealed class MainWindowViewModel :
         VerificationTools.All[0];
     private VerificationAuditEntryViewModel?
         _selectedVerificationAuditEntry;
+    private ProposedPatchPreview? _proposedPatchPreview;
     private string? _repositorySolutionFile;
     private string _verificationOutput =
         "No verification command has been run in this session.";
@@ -52,6 +53,7 @@ public sealed class MainWindowViewModel :
         "Select a repository and approve one fixed verification command.";
     private bool _repositoryIsGit;
     private bool _isVerificationApproved;
+    private bool _isPatchPreviewRequested;
     private bool _isRepositoryPanelOpen;
     private bool _isAgentMode;
     private bool _isBusy;
@@ -115,6 +117,10 @@ public sealed class MainWindowViewModel :
             RunVerificationAsync,
             CanRunVerification);
 
+        DismissPatchPreviewCommand = new RelayCommand(
+            DismissPatchPreview,
+            () => HasProposedPatchPreview && !IsBusy);
+
         CancelCommand = new RelayCommand(
             Cancel,
             () => IsBusy);
@@ -171,6 +177,8 @@ public sealed class MainWindowViewModel :
     public AsyncRelayCommand SendCommand { get; }
 
     public AsyncRelayCommand RunVerificationCommand { get; }
+
+    public RelayCommand DismissPatchPreviewCommand { get; }
 
     public RelayCommand CancelCommand { get; }
 
@@ -305,6 +313,14 @@ public sealed class MainWindowViewModel :
             OnPropertyChanged(nameof(AgentEvidenceText));
             SendCommand.NotifyCanExecuteChanged();
             IsVerificationApproved = false;
+
+            if (!value)
+            {
+                _isPatchPreviewRequested = false;
+                OnPropertyChanged(nameof(IsPatchPreviewRequested));
+                ClearProposedPatchPreview();
+            }
+
             UpdateVerificationReadiness();
             StatusText = value
                 ? "Agent mode is read-only and protects source files. " +
@@ -313,6 +329,51 @@ public sealed class MainWindowViewModel :
                 : "Local conversation mode enabled.";
         }
     }
+
+    public bool IsPatchPreviewRequested
+    {
+        get => _isPatchPreviewRequested;
+        set
+        {
+            if (!SetField(ref _isPatchPreviewRequested, value))
+            {
+                return;
+            }
+
+            ClearProposedPatchPreview();
+            SendCommand.NotifyCanExecuteChanged();
+            StatusText = value
+                ? "Patch preview mode enabled. Select at least one source " +
+                  "file; no changes will be applied."
+                : "Agent planning mode enabled.";
+        }
+    }
+
+    public ProposedPatchPreview? ProposedPatchPreview
+    {
+        get => _proposedPatchPreview;
+        private set
+        {
+            if (!SetField(ref _proposedPatchPreview, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(HasProposedPatchPreview));
+            OnPropertyChanged(nameof(PatchPreviewSummaryText));
+            DismissPatchPreviewCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public bool HasProposedPatchPreview =>
+        ProposedPatchPreview is not null;
+
+    public string PatchPreviewSummaryText =>
+        ProposedPatchPreview is null
+            ? "No proposed patch preview."
+            : $"{ProposedPatchPreview.Files.Count} file(s) • " +
+              $"+{ProposedPatchPreview.AddedLineCount} / " +
+              $"-{ProposedPatchPreview.RemovedLineCount}";
 
     public VerificationToolDescriptor SelectedVerificationTool
     {
@@ -421,6 +482,7 @@ public sealed class MainWindowViewModel :
             RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
             SendCommand.NotifyCanExecuteChanged();
             RunVerificationCommand.NotifyCanExecuteChanged();
+            DismissPatchPreviewCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
             NewChatCommand.NotifyCanExecuteChanged();
         }
@@ -458,6 +520,7 @@ public sealed class MainWindowViewModel :
         MessageInput = string.Empty;
         ElapsedText = string.Empty;
         ClearVerificationHistory();
+        ClearProposedPatchPreview();
         StatusText = "New conversation started.";
         AddWelcomeMessage();
     }
@@ -531,6 +594,7 @@ public sealed class MainWindowViewModel :
             RepositoryTree.Clear();
             ClearContextFiles();
             ClearVerificationHistory();
+            ClearProposedPatchPreview();
 
             foreach (RepositoryTreeNode rootEntry in
                      repository.RootEntries)
@@ -564,6 +628,7 @@ public sealed class MainWindowViewModel :
             SelectedRepositoryItem = null;
             ClearContextFiles();
             ClearVerificationHistory();
+            ClearProposedPatchPreview();
             OnPropertyChanged(nameof(AgentEvidenceText));
             UpdateVerificationReadiness();
 
@@ -637,7 +702,10 @@ public sealed class MainWindowViewModel :
         return !IsBusy &&
                !string.IsNullOrWhiteSpace(SelectedModel) &&
                !string.IsNullOrWhiteSpace(MessageInput) &&
-               (!IsAgentMode || Directory.Exists(RepositoryPath));
+               (!IsAgentMode || Directory.Exists(RepositoryPath)) &&
+               (!IsAgentMode ||
+                !IsPatchPreviewRequested ||
+                ContextFiles.Count > 0);
     }
 
     private bool CanRunVerification()
@@ -963,12 +1031,14 @@ public sealed class MainWindowViewModel :
 
     private void NotifyContextChanged()
     {
+        ClearProposedPatchPreview();
         OnPropertyChanged(nameof(ContextSizeBytes));
         OnPropertyChanged(nameof(EstimatedContextTokens));
         OnPropertyChanged(nameof(ContextSizeText));
         OnPropertyChanged(nameof(AgentEvidenceText));
         AddSelectedFileToContextCommand.NotifyCanExecuteChanged();
         RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
+        SendCommand.NotifyCanExecuteChanged();
     }
 
     private async Task SendAsync()
@@ -980,12 +1050,14 @@ public sealed class MainWindowViewModel :
 
         string model = SelectedModel!;
         string prompt = MessageInput.Trim();
+        bool patchPreviewRequested =
+            IsAgentMode && IsPatchPreviewRequested;
         string modelPrompt;
 
         try
         {
-            modelPrompt = IsAgentMode
-                ? AgentPlanPromptBuilder.Build(
+            modelPrompt = patchPreviewRequested
+                ? AgentPatchPromptBuilder.Build(
                     prompt,
                     RepositoryName,
                     RepositorySummary,
@@ -993,6 +1065,15 @@ public sealed class MainWindowViewModel :
                     SelectedGenerationProfile
                         .MaximumRepositoryContextTokens,
                     _verificationRuns)
+                : IsAgentMode
+                    ? AgentPlanPromptBuilder.Build(
+                        prompt,
+                        RepositoryName,
+                        RepositorySummary,
+                        ContextFiles.Select(file => file.File),
+                        SelectedGenerationProfile
+                            .MaximumRepositoryContextTokens,
+                        _verificationRuns)
                 : RepositoryContextPromptBuilder.Build(
                     prompt,
                     ContextFiles.Select(file => file.File),
@@ -1006,6 +1087,11 @@ public sealed class MainWindowViewModel :
         }
 
         MessageInput = string.Empty;
+
+        if (patchPreviewRequested)
+        {
+            ClearProposedPatchPreview();
+        }
 
         Messages.Add(
             new ChatMessageViewModel(
@@ -1047,7 +1133,16 @@ public sealed class MainWindowViewModel :
                     responseBuilder.ToString();
             }
 
-            StatusText = "Response completed.";
+            if (patchPreviewRequested)
+            {
+                ProcessProposedPatch(
+                    responseBuilder.ToString(),
+                    assistantMessage);
+            }
+            else
+            {
+                StatusText = "Response completed.";
+            }
         }
         catch (OperationCanceledException)
         {
@@ -1090,6 +1185,49 @@ public sealed class MainWindowViewModel :
             _requestCancellation?.Dispose();
             _requestCancellation = null;
         }
+    }
+
+    private void ProcessProposedPatch(
+        string modelResponse,
+        ChatMessageViewModel assistantMessage)
+    {
+        ProposedPatchParseResult result = ProposedPatchParser.Parse(
+            modelResponse,
+            RepositoryPath,
+            ContextFiles.Select(file => file.RelativePath));
+
+        if (!result.IsSuccess)
+        {
+            ProposedPatchPreview = null;
+            assistantMessage.Content =
+                modelResponse +
+                Environment.NewLine +
+                Environment.NewLine +
+                $"Patch preview rejected: {result.Error}" +
+                Environment.NewLine +
+                "Preview only — no changes applied.";
+            StatusText = "Patch preview rejected as malformed or unsafe.";
+            return;
+        }
+
+        ProposedPatchPreview = result.Preview;
+        assistantMessage.Content =
+            $"Proposed patch preview created for " +
+            $"{result.Preview!.Files.Count} file(s)." +
+            Environment.NewLine +
+            "Preview only — not applied.";
+        StatusText = "Patch preview ready. No source changes were applied.";
+    }
+
+    private void DismissPatchPreview()
+    {
+        ClearProposedPatchPreview();
+        StatusText = "Patch preview dismissed. No source changes were applied.";
+    }
+
+    private void ClearProposedPatchPreview()
+    {
+        ProposedPatchPreview = null;
     }
 
     private static void PreservePartialResponse(

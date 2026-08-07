@@ -236,6 +236,7 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <Grid Margin="4,0,4,8">
@@ -276,6 +277,11 @@
                                            Foreground="#6B5A1A"
                                            TextWrapping="Wrap"
                                            Text="{Binding AgentEvidenceText}"/>
+
+                                <CheckBox Margin="0,8,0,0"
+                                          Content="Request structured patch preview"
+                                          IsChecked="{Binding IsPatchPreviewRequested}"
+                                          IsEnabled="{Binding IsNotBusy}"/>
                             </StackPanel>
                         </Border>
 
@@ -362,8 +368,88 @@
                             </StackPanel>
                         </Border>
 
+                        <Border Grid.Row="3"
+                                MaxHeight="260"
+                                Margin="4,0,4,10"
+                                Padding="10"
+                                Background="#F4F8F2"
+                                BorderBrush="#A7C79A"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Visibility="{Binding HasProposedPatchPreview,
+                                    Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel>
+                                        <TextBlock FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#31512B"
+                                                   Text="Proposed patch • Preview only — not applied"/>
+
+                                        <TextBlock Margin="0,3,0,0"
+                                                   FontSize="10"
+                                                   Foreground="#4D6848"
+                                                   Text="{Binding PatchPreviewSummaryText}"/>
+                                    </StackPanel>
+
+                                    <Button Grid.Column="1"
+                                            MinWidth="64"
+                                            Height="26"
+                                            Margin="10,0,0,0"
+                                            Command="{Binding DismissPatchPreviewCommand}"
+                                            Content="Dismiss"/>
+                                </Grid>
+
+                                <TextBlock Grid.Row="1"
+                                           Margin="0,8,0,0"
+                                           FontSize="11"
+                                           Foreground="#303A2E"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding ProposedPatchPreview.Summary}"/>
+
+                                <ItemsControl Grid.Row="2"
+                                              Margin="0,7,0,0"
+                                              ItemsSource="{Binding ProposedPatchPreview.Files}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock FontFamily="Consolas"
+                                                       FontSize="10"
+                                                       Foreground="#40543C"
+                                                       Text="{Binding RelativePath}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBox Grid.Row="3"
+                                         MinHeight="76"
+                                         MaxHeight="150"
+                                         Margin="0,8,0,0"
+                                         Padding="8"
+                                         IsReadOnly="True"
+                                         FontFamily="Consolas"
+                                         FontSize="10"
+                                         TextWrapping="NoWrap"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         VerticalScrollBarVisibility="Auto"
+                                         Text="{Binding ProposedPatchPreview.UnifiedDiff,
+                                                        Mode=OneWay}"/>
+                            </Grid>
+                        </Border>
+
                         <TextBox x:Name="MessageInputTextBox"
-                                 Grid.Row="3"
+                                 Grid.Row="4"
                                  MinHeight="54"
                                  MaxHeight="160"
                                  Padding="4"
@@ -377,7 +463,7 @@
                                  Text="{Binding MessageInput,
                                                 UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <Grid Grid.Row="4"
+                        <Grid Grid.Row="5"
                               Margin="0,10,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>

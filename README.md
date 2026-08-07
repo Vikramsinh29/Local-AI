@@ -15,12 +15,13 @@ an external AI service.
   the selected root, linked roots, and oversized context.
 - Controlled Agent mode that creates an evidence-based implementation plan
   without changing repository files.
+- Four fixed verification tools with fresh one-run approval, isolated build
+  output, streamed results, cancellation, and a current-session audit.
 
 The current roadmap is in [ROADMAP.md](ROADMAP.md). The active scope is Phase
-1, Sprint 1.2: four fixed verification tools with explicit one-run approval,
-streamed output, cancellation, and a session audit. It does not provide an
-arbitrary terminal and must not apply source changes, restore packages, commit,
-or push.
+1, Sprint 1.3: strict structured patch proposals rendered as unified previews.
+Every proposal remains preview-only. Local-AI does not provide an arbitrary
+terminal and must not apply source changes, restore packages, commit, or push.
 
 ## Requirements
 

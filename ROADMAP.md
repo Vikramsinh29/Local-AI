@@ -1,9 +1,9 @@
 # Local-AI Roadmap
 
 **Status:** Active
-**Last updated:** 2026-08-06
-**Baseline:** `3f645d7` (`main`) — Sprint 1.1 and the repository-details
-layout fix, 45 passing tests
+**Last updated:** 2026-08-07
+**Baseline:** `61b0435` (`main`) — Sprint 1.2 approved verification tools,
+62 passing tests
 
 ## Purpose
 
@@ -36,7 +36,9 @@ sprint small, evidence-based, and safe.
   context with secret, binary, path-containment, and size protections.
 - Controlled Agent mode that produces an evidence-bounded, read-only plan and
   explicitly states that no source changes were applied.
-- 45 automated tests passing at the current baseline.
+- Four fixed, one-run-approved Git/build/test tools with isolated output,
+  cancellation, bounded live output, and an in-session audit.
+- 62 automated tests passing at the current baseline.
 
 ## Roadmap
 
@@ -54,7 +56,7 @@ for a selected repository, without allowing it to change anything.
   affected files, and evidence links before proposing work.
 - Display an explicit `No changes applied` status.
 
-**Sprint 1.2 — Approved verification tools — Active**
+**Sprint 1.2 — Approved verification tools — Complete (`61b0435`)**
 
 - Add a strictly allow-listed tool runner for read-only Git commands and
   configured `dotnet build`, `dotnet test`, and lint commands.
@@ -64,7 +66,7 @@ for a selected repository, without allowing it to change anything.
 - Never allow shell interpolation, arbitrary executables, network commands,
   package installation, file deletion, commits, or pushes.
 
-**Sprint 1.3 — Proposed patch preview**
+**Sprint 1.3 — Proposed patch preview — Active**
 
 - Ask the model for a structured proposed patch, not a direct file write.
 - Validate every proposed path remains inside the selected repository.
@@ -161,15 +163,19 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Name:** Approved Verification Tools
-**Scope:** Phase 1, Sprint 1.2 only.
+**Name:** Structured Proposed Patch Preview
+**Scope:** Phase 1, Sprint 1.3 only.
 
-Add four fixed, one-run-approved tools: protected Git status, protected Git
-diff check, Release build without restore, and Release tests without build or
-restore. Build and test share ignored, isolated `.local-ai/verification`
-artifacts so verification can run while the desktop app is open; this generated
-state stays hidden from repository inspection and source context. Stream
-bounded output, support cancellation, retain a session audit, and feed retained
-results back as agent evidence. Do not add arbitrary command entry, lint without
-a repository-defined configuration, patch generation or application,
-project-memory persistence, package restore, commit, or push.
+Add an optional Agent-mode request for one delimiter-based
+`LOCAL_AI_PATCH_V1` proposal. Require selected source evidence; strictly parse
+the response; require distinct exact ORIGINAL and REPLACEMENT text; verify the
+original occurs once in the selected evidence file; and reject malformed,
+duplicate, protected, escaping, unselected, unavailable, or linked paths. Build
+the diff locally after an exact match or one unique leading-indentation-only
+normalization. Extract exactly one marked proposal when a small model adds
+plain explanatory text outside it, while continuing to reject Markdown-wrapped
+or duplicated envelopes. Show a preview and changed-file summary marked
+`Preview only — not applied`. Retained verification runs may be cited as
+evidence. Do not add repository writes, patch application, arbitrary commands,
+package restore, commit, push, project memory, automatic retries, or
+model-directed tool execution.

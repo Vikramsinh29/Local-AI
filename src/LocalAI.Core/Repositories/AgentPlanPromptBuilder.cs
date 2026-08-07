@@ -5,8 +5,6 @@ namespace LocalAI.Core.Repositories;
 
 public static class AgentPlanPromptBuilder
 {
-    private const int MaximumVerificationEvidenceCharacters = 8_000;
-
     public static string Build(
         string userRequest,
         string repositoryName,
@@ -24,10 +22,8 @@ public static class AgentPlanPromptBuilder
 
         RepositoryContextFile[] files = contextFiles.ToArray();
         VerificationRunResult[] retainedVerificationRuns =
-            (verificationRuns ?? [])
-                .OrderBy(run => run.CompletedAt)
-                .TakeLast(3)
-                .ToArray();
+            AgentVerificationEvidencePromptBuilder.RetainRecent(
+                verificationRuns);
 
         string repositoryPrompt = RepositoryContextPromptBuilder.Build(
             userRequest,
@@ -66,7 +62,7 @@ public static class AgentPlanPromptBuilder
         builder.Append(repositoryPrompt);
         builder.AppendLine();
         builder.AppendLine();
-        AppendVerificationEvidence(
+        AgentVerificationEvidencePromptBuilder.AppendEvidence(
             builder,
             retainedVerificationRuns);
         AppendFinalResponseRequirements(
@@ -75,65 +71,6 @@ public static class AgentPlanPromptBuilder
             retainedVerificationRuns);
 
         return builder.ToString();
-    }
-
-    private static void AppendVerificationEvidence(
-        StringBuilder builder,
-        IEnumerable<VerificationRunResult> verificationRuns)
-    {
-        VerificationRunResult[] runs = verificationRuns.ToArray();
-
-        builder.AppendLine("--- VERIFICATION EVIDENCE ---");
-
-        if (runs.Length == 0)
-        {
-            builder.AppendLine(
-                "No verification tools have been run in this session.");
-            builder.AppendLine("--- END VERIFICATION EVIDENCE ---");
-            builder.AppendLine();
-            return;
-        }
-
-        int remaining = MaximumVerificationEvidenceCharacters;
-
-        foreach (VerificationRunResult run in runs)
-        {
-            string header =
-                $"Command: {run.DisplayCommand}{Environment.NewLine}" +
-                $"Outcome: {GetOutcome(run)}; exit code: " +
-                $"{run.ExitCode}{Environment.NewLine}";
-
-            AppendWithinLimit(builder, header, ref remaining);
-
-            if (remaining <= 0)
-            {
-                break;
-            }
-
-            string output = string.IsNullOrWhiteSpace(run.Output)
-                ? "[No command output]"
-                : run.Output;
-
-            AppendWithinLimit(
-                builder,
-                $"Output:{Environment.NewLine}{output}" +
-                Environment.NewLine,
-                ref remaining);
-
-            if (remaining <= 0)
-            {
-                break;
-            }
-        }
-
-        if (remaining <= 0)
-        {
-            builder.AppendLine(
-                "[Verification evidence truncated to Local-AI limit]");
-        }
-
-        builder.AppendLine("--- END VERIFICATION EVIDENCE ---");
-        builder.AppendLine();
     }
 
     private static void AppendFinalResponseRequirements(
@@ -164,7 +101,8 @@ public static class AgentPlanPromptBuilder
             {
                 builder.AppendLine(
                     $"Required evidence citation: {run.DisplayCommand} | " +
-                    $"{GetOutcome(run)} | exit code {run.ExitCode}");
+                    $"{AgentVerificationEvidencePromptBuilder.GetOutcome(run)} " +
+                    $"| exit code {run.ExitCode}");
             }
 
             builder.AppendLine(
@@ -177,28 +115,4 @@ public static class AgentPlanPromptBuilder
             "commands, outcomes, files, or changes.");
     }
 
-    private static string GetOutcome(VerificationRunResult run)
-    {
-        if (run.WasCancelled)
-        {
-            return "cancelled";
-        }
-
-        return run.IsSuccess ? "passed" : "failed";
-    }
-
-    private static void AppendWithinLimit(
-        StringBuilder builder,
-        string value,
-        ref int remaining)
-    {
-        if (remaining <= 0)
-        {
-            return;
-        }
-
-        int length = Math.Min(value.Length, remaining);
-        builder.Append(value.AsSpan(0, length));
-        remaining -= length;
-    }
 }

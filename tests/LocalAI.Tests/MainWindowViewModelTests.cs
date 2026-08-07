@@ -372,6 +372,150 @@ public sealed class MainWindowViewModelTests
         }
     }
 
+    [Fact]
+    public async Task PatchPreview_RequiresSelectedSourceEvidence()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+            using MainWindowViewModel viewModel = CreateViewModel(
+                new FakeOllamaClient((_, _) => StreamText("unused")),
+                folderPickerService:
+                    new FakeFolderPickerService(repositoryRoot),
+                repositoryInspector:
+                    new FakeRepositoryInspector(repository));
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+            viewModel.IsAgentMode = true;
+            viewModel.IsPatchPreviewRequested = true;
+            viewModel.MessageInput = "Propose a change.";
+
+            Assert.False(viewModel.SendCommand.CanExecute(null));
+            Assert.False(viewModel.HasProposedPatchPreview);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task PatchPreview_ParsesAndDisplaysValidatedProposal()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        string modelResponse = BuildValidPatchResponse();
+        FakeOllamaClient ollama = new(
+            (_, _) => StreamText(modelResponse));
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+            using MainWindowViewModel viewModel = CreateViewModel(
+                ollama,
+                folderPickerService:
+                    new FakeFolderPickerService(repositoryRoot),
+                repositoryInspector:
+                    new FakeRepositoryInspector(repository));
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+            viewModel.ContextFiles.Add(
+                new RepositoryContextFileViewModel(
+                    new RepositoryContextFile(
+                        "src/Program.cs",
+                        "return 42;",
+                        10)));
+            viewModel.IsAgentMode = true;
+            viewModel.IsPatchPreviewRequested = true;
+            viewModel.MessageInput = "Change the return value.";
+
+            await viewModel.SendCommand.ExecuteAsync();
+
+            Assert.True(viewModel.HasProposedPatchPreview);
+            Assert.Single(viewModel.ProposedPatchPreview!.Files);
+            Assert.Equal(
+                "1 file(s) • +1 / -1",
+                viewModel.PatchPreviewSummaryText);
+            Assert.Contains(
+                "Preview only — not applied",
+                viewModel.Messages[^1].Content);
+            Assert.Contains(
+                "controlled patch-preview mode",
+                ollama.LastPrompt);
+            Assert.Equal(
+                "return 42;\n",
+                File.ReadAllText(
+                    Path.Combine(
+                        repositoryRoot,
+                        "src",
+                        "Program.cs")));
+
+            viewModel.IsPatchPreviewRequested = false;
+
+            Assert.False(viewModel.HasProposedPatchPreview);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task PatchPreview_RejectsMalformedModelOutput()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        FakeOllamaClient ollama = new(
+            (_, _) => StreamText("```diff\nunsafe\n```"));
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+            using MainWindowViewModel viewModel = CreateViewModel(
+                ollama,
+                folderPickerService:
+                    new FakeFolderPickerService(repositoryRoot),
+                repositoryInspector:
+                    new FakeRepositoryInspector(repository));
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+            viewModel.ContextFiles.Add(
+                new RepositoryContextFileViewModel(
+                    new RepositoryContextFile(
+                        "src/Program.cs",
+                        "return 42;",
+                        10)));
+            viewModel.IsAgentMode = true;
+            viewModel.IsPatchPreviewRequested = true;
+            viewModel.MessageInput = "Change the return value.";
+
+            await viewModel.SendCommand.ExecuteAsync();
+
+            Assert.False(viewModel.HasProposedPatchPreview);
+            Assert.Contains(
+                "Patch preview rejected",
+                viewModel.Messages[^1].Content);
+            Assert.Contains(
+                "malformed or unsafe",
+                viewModel.StatusText);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
     private static MainWindowViewModel CreateViewModel(
         IOllamaClient ollamaClient,
         IVerificationToolRunner? verificationToolRunner = null,
@@ -459,12 +603,44 @@ public sealed class MainWindowViewModelTests
         throw new InvalidDataException("stream failed");
     }
 
+    private static async IAsyncEnumerable<string> StreamText(string text)
+    {
+        await Task.Yield();
+        yield return text;
+    }
+
+    private static string BuildValidPatchResponse()
+    {
+        return
+            "<<<LOCAL_AI_PATCH_V1>>>\n" +
+            "SUMMARY:\n" +
+            "Change the return value.\n" +
+            "<<<FILE:src/Program.cs>>>\n" +
+            "<<<ORIGINAL>>>\n" +
+            "return 42;\n" +
+            "<<<REPLACEMENT>>>\n" +
+            "return 43;\n" +
+            "<<<END_FILE>>>\n" +
+            "<<<END_LOCAL_AI_PATCH>>>";
+    }
+
+    private static void CreatePatchSourceFile(string repositoryRoot)
+    {
+        string sourceDirectory = Path.Combine(repositoryRoot, "src");
+        Directory.CreateDirectory(sourceDirectory);
+        File.WriteAllText(
+            Path.Combine(sourceDirectory, "Program.cs"),
+            "return 42;\n");
+    }
+
     private sealed class FakeOllamaClient(
         Func<GenerationProfile, CancellationToken, IAsyncEnumerable<string>>
             streamFactory)
         : IOllamaClient
     {
         public int GenerationCount { get; private set; }
+
+        public string LastPrompt { get; private set; } = string.Empty;
 
         public Task<bool> IsAvailableAsync(
             CancellationToken cancellationToken = default) =>
@@ -482,6 +658,7 @@ public sealed class MainWindowViewModelTests
             CancellationToken cancellationToken = default)
         {
             GenerationCount++;
+            LastPrompt = prompt;
             return streamFactory(profile, cancellationToken);
         }
     }

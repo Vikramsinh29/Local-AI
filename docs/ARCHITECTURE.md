@@ -55,6 +55,25 @@ Verification execution crosses a separate controlled boundary:
   context. These tools are permitted only for a repository the user trusts
   because MSBuild targets can execute project code and write generated output.
 
+Proposed patches cross a separate model-output boundary:
+
+- Core builds an evidence-bounded `LOCAL_AI_PATCH_V1` request and extracts
+  exactly one complete marked proposal. Ordinary surrounding explanation is
+  ignored, but Markdown-wrapped, duplicated, or malformed envelopes are
+  rejected rather than repaired.
+- The model supplies exact ORIGINAL and REPLACEMENT text instead of constructing
+  diff grammar. The parser requires the original to occur exactly once in a
+  selected evidence file and rejects duplicate, protected, escaping,
+  unavailable, unselected, or linked paths.
+- If exact matching fails, the parser may ignore leading indentation only. The
+  remaining text must match one unique, line-count-preserving source fragment;
+  Local-AI then restores the file's actual indentation.
+- Core constructs the displayed diff only after that evidence validation.
+- Desktop keeps the proposal in memory and renders a unified preview with an
+  explicit `Preview only — not applied` label.
+- No Core, Infrastructure, Desktop, or model-directed code path writes the
+  proposal to the selected repository during Phase 1.
+
 ## Change rules
 
 1. Start from the smallest affected layer.
