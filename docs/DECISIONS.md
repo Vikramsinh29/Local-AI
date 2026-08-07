@@ -87,3 +87,19 @@ clean working tree provides an external recovery path, while snapshot and
 content checks prevent a stale preview from overwriting newer work. Automatic
 verification, multi-file transactions, and rollback UI require separate
 reviewed sprints.
+
+## D-009 — Apply approval includes a fixed post-apply verification sequence
+
+**Decision:** Sprint 2.2 makes the one-run apply approval explicitly cover Git
+diff check and, when exactly one valid .NET solution is detected, the existing
+isolated Release build followed by Release tests. The sequence stops on the
+first failure or cancellation and retains every attempted step in the session
+audit. If verification cannot complete, the applied source change remains and
+Local-AI states that fact.
+
+**Reason:** Verification evidence is most useful immediately after the reviewed
+write, but adding another approval between the write and its fixed checks can
+leave an unverified change without a clear outcome. Reusing the existing
+allow-list avoids a new command surface. Stop-on-failure prevents misleading
+downstream test claims, while explicit no-rollback wording preserves the narrow
+scope until rollback is designed separately.

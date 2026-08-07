@@ -545,13 +545,22 @@ public sealed class MainWindowViewModelTests
 
             await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
 
-            Assert.Equal(1, runner.RunCount);
+            Assert.Equal(4, runner.RunCount);
+            Assert.Equal(
+                new[]
+                {
+                    VerificationToolKind.GitStatus,
+                    VerificationToolKind.GitDiffCheck,
+                    VerificationToolKind.DotnetBuild,
+                    VerificationToolKind.DotnetTest
+                },
+                runner.RunTools);
             Assert.Equal(1, patchService.ApplyCount);
             Assert.False(viewModel.IsPatchApplyApproved);
             Assert.False(viewModel.HasProposedPatchPreview);
             Assert.Empty(viewModel.ContextFiles);
-            Assert.Single(viewModel.VerificationAuditEntries);
-            Assert.Contains("verification is required", viewModel.StatusText);
+            Assert.Equal(4, viewModel.VerificationAuditEntries.Count);
+            Assert.Contains("all passed", viewModel.StatusText);
         }
         finally
         {
@@ -626,6 +635,260 @@ public sealed class MainWindowViewModelTests
         }
     }
 
+    [Fact]
+    public async Task PatchApply_StopsPostApplySequenceWhenDiffCheckFails()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        FakeVerificationToolRunner runner = new(
+            (tool, _, _, _, _) =>
+            {
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                return Task.FromResult(
+                    new VerificationRunResult(
+                        tool,
+                        tool.ToString(),
+                        now,
+                        now,
+                        ExitCode: tool == VerificationToolKind.GitDiffCheck
+                            ? 2
+                            : 0,
+                        WasCancelled: false,
+                        Output: tool == VerificationToolKind.GitStatus
+                            ? "## main"
+                            : "whitespace error"));
+            });
+        FakeRepositoryPatchService patchService = new(
+            (_, preview, _) => Task.FromResult(
+                PatchApplyResult.Success(
+                    preview.Files[0].RelativePath)));
+
+        try
+        {
+            using MainWindowViewModel viewModel =
+                await CreateViewModelWithPatchPreviewAsync(
+                    repositoryRoot,
+                    runner,
+                    patchService);
+            viewModel.IsPatchApplyApproved = true;
+
+            await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
+
+            Assert.Equal(
+                new[]
+                {
+                    VerificationToolKind.GitStatus,
+                    VerificationToolKind.GitDiffCheck
+                },
+                runner.RunTools);
+            Assert.False(viewModel.HasProposedPatchPreview);
+            Assert.Contains("diff check failed", viewModel.StatusText);
+            Assert.Contains("remains applied", viewModel.StatusText);
+            Assert.Contains("Patch applied", viewModel.Messages[^1].Content);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task PatchApply_StopsPostApplySequenceWhenBuildFails()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        FakeVerificationToolRunner runner = new(
+            (tool, _, _, _, _) =>
+            {
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                return Task.FromResult(
+                    new VerificationRunResult(
+                        tool,
+                        tool.ToString(),
+                        now,
+                        now,
+                        ExitCode: tool == VerificationToolKind.DotnetBuild
+                            ? 1
+                            : 0,
+                        WasCancelled: false,
+                        Output: tool == VerificationToolKind.GitStatus
+                            ? "## main"
+                            : "verification output"));
+            });
+        FakeRepositoryPatchService patchService = new(
+            (_, preview, _) => Task.FromResult(
+                PatchApplyResult.Success(
+                    preview.Files[0].RelativePath)));
+
+        try
+        {
+            using MainWindowViewModel viewModel =
+                await CreateViewModelWithPatchPreviewAsync(
+                    repositoryRoot,
+                    runner,
+                    patchService);
+            viewModel.IsPatchApplyApproved = true;
+
+            await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
+
+            Assert.Equal(
+                new[]
+                {
+                    VerificationToolKind.GitStatus,
+                    VerificationToolKind.GitDiffCheck,
+                    VerificationToolKind.DotnetBuild
+                },
+                runner.RunTools);
+            Assert.Contains("Release build failed", viewModel.StatusText);
+            Assert.Contains("remains applied", viewModel.StatusText);
+            Assert.DoesNotContain(
+                VerificationToolKind.DotnetTest,
+                runner.RunTools);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task PatchApply_ReportsPostApplyTestFailure()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        FakeVerificationToolRunner runner = new(
+            (tool, _, _, _, _) =>
+            {
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                return Task.FromResult(
+                    new VerificationRunResult(
+                        tool,
+                        tool.ToString(),
+                        now,
+                        now,
+                        ExitCode: tool == VerificationToolKind.DotnetTest
+                            ? 1
+                            : 0,
+                        WasCancelled: false,
+                        Output: tool == VerificationToolKind.GitStatus
+                            ? "## main"
+                            : "verification output"));
+            });
+        FakeRepositoryPatchService patchService = new(
+            (_, preview, _) => Task.FromResult(
+                PatchApplyResult.Success(
+                    preview.Files[0].RelativePath)));
+
+        try
+        {
+            using MainWindowViewModel viewModel =
+                await CreateViewModelWithPatchPreviewAsync(
+                    repositoryRoot,
+                    runner,
+                    patchService);
+            viewModel.IsPatchApplyApproved = true;
+
+            await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
+
+            Assert.Equal(4, runner.RunCount);
+            Assert.Contains("Release tests failed", viewModel.StatusText);
+            Assert.Contains("remains applied", viewModel.StatusText);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task PatchApply_ReportsCancelledPostApplyVerification()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        FakeVerificationToolRunner runner = new(
+            (tool, _, _, _, _) =>
+            {
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                return Task.FromResult(
+                    new VerificationRunResult(
+                        tool,
+                        tool.ToString(),
+                        now,
+                        now,
+                        ExitCode: tool == VerificationToolKind.GitDiffCheck
+                            ? -1
+                            : 0,
+                        WasCancelled:
+                            tool == VerificationToolKind.GitDiffCheck,
+                        Output: tool == VerificationToolKind.GitStatus
+                            ? "## main"
+                            : "cancelled"));
+            });
+        FakeRepositoryPatchService patchService = new(
+            (_, preview, _) => Task.FromResult(
+                PatchApplyResult.Success(
+                    preview.Files[0].RelativePath)));
+
+        try
+        {
+            using MainWindowViewModel viewModel =
+                await CreateViewModelWithPatchPreviewAsync(
+                    repositoryRoot,
+                    runner,
+                    patchService);
+            viewModel.IsPatchApplyApproved = true;
+
+            await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
+
+            Assert.Equal(2, runner.RunCount);
+            Assert.False(viewModel.HasProposedPatchPreview);
+            Assert.Contains("cancelled", viewModel.StatusText);
+            Assert.Contains("remains applied", viewModel.StatusText);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task PatchApply_WithoutSingleSolutionRunsOnlyDiffCheck()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        FakeVerificationToolRunner runner = CreateGitStatusRunner("## main");
+        FakeRepositoryPatchService patchService = new(
+            (_, preview, _) => Task.FromResult(
+                PatchApplyResult.Success(
+                    preview.Files[0].RelativePath)));
+
+        try
+        {
+            using MainWindowViewModel viewModel =
+                await CreateViewModelWithPatchPreviewAsync(
+                    repositoryRoot,
+                    runner,
+                    patchService,
+                    hasSingleSolution: false);
+            viewModel.IsPatchApplyApproved = true;
+
+            await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
+
+            Assert.Equal(
+                new[]
+                {
+                    VerificationToolKind.GitStatus,
+                    VerificationToolKind.GitDiffCheck
+                },
+                runner.RunTools);
+            Assert.Contains("not detected", viewModel.StatusText);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
     private static FakeVerificationToolRunner CreateGitStatusRunner(
         string output)
     {
@@ -649,12 +912,16 @@ public sealed class MainWindowViewModelTests
         CreateViewModelWithPatchPreviewAsync(
             string repositoryRoot,
             IVerificationToolRunner runner,
-            IRepositoryPatchService patchService)
+            IRepositoryPatchService patchService,
+            bool hasSingleSolution = true)
     {
+        IReadOnlyList<string> solutionFiles = hasSingleSolution
+            ? new[] { "Sample.slnx" }
+            : Array.Empty<string>();
         RepositoryInfo repository = CreateRepositoryInfo(
             repositoryRoot,
             isGitRepository: true,
-            solutionFiles: ["Sample.slnx"]);
+            solutionFiles: solutionFiles);
         MainWindowViewModel viewModel = CreateViewModel(
             new FakeOllamaClient(
                 (_, _) => StreamText(BuildValidPatchResponse())),
@@ -862,6 +1129,8 @@ public sealed class MainWindowViewModelTests
     {
         public int RunCount { get; private set; }
 
+        public List<VerificationToolKind> RunTools { get; } = [];
+
         public Task<VerificationRunResult> RunAsync(
             VerificationToolKind tool,
             string repositoryRoot,
@@ -870,6 +1139,7 @@ public sealed class MainWindowViewModelTests
             CancellationToken cancellationToken = default)
         {
             RunCount++;
+            RunTools.Add(tool);
 
             return run is null
                 ? throw new NotSupportedException()

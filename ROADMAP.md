@@ -2,8 +2,8 @@
 
 **Status:** Active
 **Last updated:** 2026-08-07
-**Baseline:** `bea4850` (`main`) — Sprint 1.3 structured proposed patch
-preview, 87 passing tests
+**Baseline:** `7c89faf` (`main`) — Sprint 2.1 approval-gated single-file
+apply, 95 passing tests
 
 ## Purpose
 
@@ -39,8 +39,10 @@ sprint small, evidence-based, and safe.
 - Four fixed, one-run-approved Git/build/test tools with isolated output,
   cancellation, bounded live output, and an in-session audit.
 - Strict, evidence-grounded structured patch previews with locally constructed
-  unified diffs and no Phase 1 repository write path.
-- 87 automated tests passing at the current baseline.
+  unified diffs.
+- Approval-gated, clean-Git, atomic single-file apply with immediate source
+  revalidation and stale-context clearing.
+- 95 automated tests passing at the current baseline.
 
 ## Roadmap
 
@@ -86,7 +88,7 @@ for a selected repository, without allowing it to change anything.
 
 **Goal:** Allow useful code changes while preserving user control.
 
-**Sprint 2.1 — Approval-gated single-file apply — Active**
+**Sprint 2.1 — Approval-gated single-file apply — Complete (`7c89faf`)**
 
 - Apply only one currently displayed, validated in-memory preview.
 - Require a separate one-run approval and consume it before any operation.
@@ -98,9 +100,21 @@ for a selected repository, without allowing it to change anything.
 - Clear stale source context and require the user to run verification after a
   successful apply.
 
-**Deferred to later Phase 2 sprints:** multi-file transactions, automatic
-post-apply verification, integrated rollback, commit, push, model-directed
-tools, and unattended apply.
+**Sprint 2.2 — Disclosed post-apply verification — Active**
+
+- Make the one-run apply approval explicitly include the fixed post-apply
+  verification sequence.
+- After a successful write, always run protected Git diff check.
+- When exactly one root-contained .NET solution is detected, run the existing
+  isolated Release build and then Release tests without restore.
+- Stop on the first failure or cancellation, retain every result in the
+  current-session audit, and state clearly that the source change remains
+  applied.
+- When no single solution is available, report build/tests as not run rather
+  than inventing a result.
+
+**Deferred to later Phase 2 sprints:** multi-file transactions, integrated
+rollback, commit, push, model-directed tools, and unattended apply.
 
 - Add one explicit `Apply approved patch` action.
 - Require a clean Git working tree or a user-chosen backup strategy.
@@ -181,16 +195,14 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Name:** Approval-Gated Single-File Apply
-**Scope:** Phase 2, Sprint 2.1 only.
+**Name:** Disclosed Post-Apply Verification
+**Scope:** Phase 2, Sprint 2.2 only.
 
-Add one explicit apply action for exactly one currently displayed structured
-preview. Require a separate one-run approval; consume it before running the
-protected Git-status check; reject dirty or uncertain Git output; and
-revalidate root containment, linked paths, protected paths, the exact raw-file
-snapshot, and unique ORIGINAL text immediately before an atomic replacement.
-Preserve supported encoding/BOM and line endings. Stage temporary data only in
-ignored, non-linked `.local-ai/apply`, clear stale source context after success,
-and state that verification is still required. Do not add multi-file apply,
-automatic verification, rollback UI, commit, push, arbitrary commands, package
-restore, project memory, automatic retries, or unattended/model-directed apply.
+Extend the existing one-file apply action so its approval visibly includes a
+fixed verification sequence. After a successful write, run Git diff check and,
+only when exactly one valid .NET solution is detected, the isolated Release
+build followed by Release tests. Stop after the first failed or cancelled step,
+retain each result in the session audit, never claim an unrun step passed, and
+state that a failed or cancelled verification does not roll back the applied
+source change. Do not add rollback, multi-file apply, commits, pushes,
+model-directed commands, restore, retries, project memory, or unattended apply.

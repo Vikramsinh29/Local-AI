@@ -20,9 +20,11 @@ an external AI service.
 - Strict structured patch previews grounded in selected source evidence.
 - One-file patch application with a separate one-run approval, clean-Git
   requirement, source-snapshot revalidation, and atomic replacement.
+- Disclosed post-apply Git diff check plus isolated Release build/tests when
+  exactly one .NET solution is detected, with stop-on-failure audit evidence.
 
 The current roadmap is in [ROADMAP.md](ROADMAP.md). The active scope is Phase
-2, Sprint 2.1: applying exactly one reviewed preview after explicit approval.
+2, Sprint 2.2: verifying one approved apply with the existing fixed tools.
 Local-AI does not provide an arbitrary terminal and must not restore packages,
 commit, push, or apply model output that was not separately reviewed and
 approved.

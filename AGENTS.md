@@ -76,6 +76,9 @@ LocalAI.Core -> no Desktop or Infrastructure dependency
   service for the exact in-memory preview after a separate one-run approval.
   Revalidate Git state, paths, links, and the source snapshot immediately
   before an atomic write.
+- The apply approval may include only the disclosed fixed post-apply sequence:
+  Git diff check and, when one solution is detected, isolated Release build and
+  tests. Stop on failure or cancellation and never claim an unrun step passed.
 - Never edit files in a repository selected through the LocalAI UI as part
   of repository inspection or context collection.
 - Never execute commands inside a user-selected repository through read-only

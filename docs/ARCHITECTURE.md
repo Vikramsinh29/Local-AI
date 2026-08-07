@@ -91,6 +91,20 @@ Approved patch application crosses a distinct Phase 2 write boundary:
 - Sprint 2.1 contains no multi-file transaction, automatic verification,
   rollback UI, commit, push, arbitrary shell, or model-directed write path.
 
+Post-apply verification reuses only the fixed verification boundary:
+
+- The apply approval visibly includes post-apply verification and is still
+  consumed before the clean-Git preflight.
+- A successful write always runs Git diff check. When exactly one valid .NET
+  solution is detected, the same isolated Release build and Release tests run
+  sequentially without restore.
+- The sequence stops after the first failed or cancelled step. Every completed,
+  failed, or cancelled step remains in the current-session audit.
+- A failed, unavailable, or cancelled verification never becomes a success
+  claim and does not silently roll back the already-applied source file.
+- Sprint 2.2 adds no new executable, command arguments, restore, commit, push,
+  rollback, multi-file transaction, or unattended action.
+
 ## Change rules
 
 1. Start from the smallest affected layer.

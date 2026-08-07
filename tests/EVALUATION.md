@@ -64,7 +64,17 @@ agent upgrades. Run the same cases before and after a proposed improvement.
 24. Apply one reviewed file atomically, preserve supported BOM/encoding and
     line endings, remove temporary staging, and clear stale AI context.
 25. Reject multi-file previews and cancellation without modifying source;
-    confirm no automatic verification, commit, push, or rollback occurs.
+    confirm no commit, push, or rollback occurs.
+26. Make apply approval disclose the fixed post-apply verification sequence;
+    after a successful write, retain Git preflight and Git diff-check results.
+27. With exactly one valid .NET solution, run Git diff check, Release build,
+    and Release tests in order and retain every outcome in the session audit.
+28. Stop after failed or cancelled Git diff check or Release build; do not run
+    later steps or claim they passed, and state that the patch remains applied.
+29. Without exactly one detected solution, run Git diff check only and report
+    Release build/tests as not run rather than failed or passed.
+30. Confirm post-apply verification adds no restore, arbitrary command, commit,
+    push, rollback, multi-file transaction, or unattended execution path.
 
 ## Recording results
 

@@ -406,9 +406,9 @@ public sealed class MainWindowViewModel :
             if (value)
             {
                 StatusText =
-                    "One apply is approved for this exact preview. " +
-                    "Local-AI will require clean Git and revalidate the " +
-                    "source before writing.";
+                    "One apply and its disclosed verification sequence are " +
+                    "approved for this exact preview. Local-AI will require " +
+                    "clean Git and revalidate the source before writing.";
             }
         }
     }
@@ -1290,6 +1290,7 @@ public sealed class MainWindowViewModel :
         ProposedPatchFile reviewedFile = preview.Files[0];
         VerificationToolDescriptor gitStatusTool =
             VerificationTools.Get(VerificationToolKind.GitStatus);
+        bool patchApplied = false;
 
         IsPatchApplyApproved = false;
         _requestCancellation?.Dispose();
@@ -1346,29 +1347,38 @@ public sealed class MainWindowViewModel :
                 return;
             }
 
+            patchApplied = true;
+            ClearContextFiles();
+
+            string verificationSummary =
+                await RunPostApplyVerificationAsync(
+                    _requestCancellation.Token);
+
             Messages.Add(
                 new ChatMessageViewModel(
                     isUser: false,
                     $"Applied the approved patch to " +
                     $"{result.AppliedRelativePath}." +
                     Environment.NewLine +
-                    "Run Release build and tests before trusting the " +
-                    "change."));
+                    verificationSummary));
 
-            ClearContextFiles();
-            StatusText =
-                $"Approved patch applied to {reviewedFile.RelativePath}. " +
-                "Source context was cleared; verification is required.";
+            StatusText = verificationSummary;
         }
         catch (OperationCanceledException)
         {
-            StatusText =
-                "Approved patch apply cancelled before completion.";
+            StatusText = patchApplied
+                ? $"Approved patch applied to {reviewedFile.RelativePath}, " +
+                  "but post-apply verification was cancelled. The source " +
+                  "change remains applied."
+                : "Approved patch apply cancelled before completion.";
         }
         catch (Exception exception)
         {
-            StatusText =
-                $"Approved patch apply failed safely: {exception.Message}";
+            StatusText = patchApplied
+                ? $"Approved patch applied to {reviewedFile.RelativePath}, " +
+                  $"but post-apply verification could not complete: " +
+                  $"{exception.Message}. The source change remains applied."
+                : $"Approved patch apply failed safely: {exception.Message}";
         }
         finally
         {
@@ -1379,6 +1389,131 @@ public sealed class MainWindowViewModel :
             _requestCancellation?.Dispose();
             _requestCancellation = null;
         }
+    }
+
+    private async Task<string> RunPostApplyVerificationAsync(
+        CancellationToken cancellationToken)
+    {
+        VerificationRunResult diffCheck =
+            await RunPostApplyVerificationStepAsync(
+                VerificationToolKind.GitDiffCheck,
+                cancellationToken);
+
+        if (diffCheck.WasCancelled)
+        {
+            return "Patch applied, but post-apply Git diff check was " +
+                   "cancelled. Build and tests were not run; the source " +
+                   "change remains applied.";
+        }
+
+        if (!diffCheck.IsSuccess)
+        {
+            return "Patch applied, but post-apply Git diff check failed. " +
+                   "Build and tests were not run; review the retained " +
+                   "verification output. The source change remains applied.";
+        }
+
+        if (string.IsNullOrWhiteSpace(_repositorySolutionFile))
+        {
+            return "Patch applied and Git diff check passed. Release build " +
+                   "and tests were not run because exactly one .NET " +
+                   "solution was not detected.";
+        }
+
+        VerificationRunResult build =
+            await RunPostApplyVerificationStepAsync(
+                VerificationToolKind.DotnetBuild,
+                cancellationToken);
+
+        if (build.WasCancelled)
+        {
+            return "Patch applied and Git diff check passed, but Release " +
+                   "build was cancelled. Tests were not run; the source " +
+                   "change remains applied.";
+        }
+
+        if (!build.IsSuccess)
+        {
+            return "Patch applied and Git diff check passed, but Release " +
+                   "build failed. Tests were not run; review the retained " +
+                   "verification output. The source change remains applied.";
+        }
+
+        VerificationRunResult tests =
+            await RunPostApplyVerificationStepAsync(
+                VerificationToolKind.DotnetTest,
+                cancellationToken);
+
+        if (tests.WasCancelled)
+        {
+            return "Patch applied; Git diff check and Release build passed, " +
+                   "but Release tests were cancelled. The source change " +
+                   "remains applied.";
+        }
+
+        return tests.IsSuccess
+            ? "Patch applied; Git diff check, Release build, and Release " +
+              "tests all passed."
+            : "Patch applied; Git diff check and Release build passed, but " +
+              "Release tests failed. Review the retained verification " +
+              "output. The source change remains applied.";
+    }
+
+    private async Task<VerificationRunResult>
+        RunPostApplyVerificationStepAsync(
+            VerificationToolKind kind,
+            CancellationToken cancellationToken)
+    {
+        VerificationToolDescriptor tool = VerificationTools.Get(kind);
+        DateTimeOffset startedAt = DateTimeOffset.Now;
+        VerificationOutput = string.Empty;
+        VerificationStatusText = $"Running post-apply {tool.Name}...";
+        StatusText = VerificationStatusText;
+        Progress<VerificationOutputLine> progress =
+            new(AppendVerificationOutput);
+
+        VerificationRunResult result;
+
+        try
+        {
+            result = await _verificationToolRunner.RunAsync(
+                kind,
+                RepositoryPath,
+                _repositorySolutionFile,
+                progress,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            result = new VerificationRunResult(
+                kind,
+                tool.Name,
+                startedAt,
+                DateTimeOffset.Now,
+                ExitCode: -1,
+                WasCancelled: true,
+                Output: VerificationOutput);
+        }
+        catch (Exception exception)
+        {
+            result = new VerificationRunResult(
+                kind,
+                $"{tool.Name} (not completed)",
+                startedAt,
+                DateTimeOffset.Now,
+                ExitCode: -1,
+                WasCancelled: false,
+                Output: exception.Message);
+        }
+
+        RecordVerificationResult(tool, result);
+        VerificationStatusText = result.WasCancelled
+            ? $"Post-apply {tool.Name} cancelled."
+            : result.IsSuccess
+                ? $"Post-apply {tool.Name} passed."
+                : $"Post-apply {tool.Name} failed with exit code " +
+                  $"{result.ExitCode}.";
+        return result;
     }
 
     private static bool IsCleanGitStatus(string output)

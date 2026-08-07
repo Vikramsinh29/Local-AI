@@ -452,14 +452,14 @@
                                     <TextBlock FontSize="10"
                                                Foreground="#4D6848"
                                                TextWrapping="Wrap"
-                                               Text="Sprint 2.1 applies one reviewed file only. Clean Git is required; approval is consumed once."/>
+                                               Text="Sprint 2.2 applies one reviewed file, runs Git diff check, then runs Release build/tests when one .NET solution is detected. Approval is consumed once."/>
 
                                     <StackPanel Margin="0,6,0,0"
                                                 HorizontalAlignment="Right"
                                                 Orientation="Horizontal">
                                         <CheckBox Margin="0,0,12,0"
                                                   VerticalAlignment="Center"
-                                                  Content="Approve one apply"
+                                                  Content="Approve apply + verification"
                                                   IsChecked="{Binding IsPatchApplyApproved}"/>
 
                                         <Button MinWidth="138"
