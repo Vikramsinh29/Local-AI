@@ -115,8 +115,54 @@ for a selected repository, without allowing it to change anything.
 - When no single solution is available, report build/tests as not run rather
   than inventing a result.
 
-**Deferred to later Phase 2 sprints:** multi-file transactions, integrated
-rollback, commit, push, model-directed tools, and unattended apply.
+**Sprint 2.3  Explicit current-session single-file rollback  Active**
+
+**User-visible goal:** After one approved patch is applied, let the user
+explicitly restore that exact file to its pre-apply bytes during the current
+Local-AI session.
+
+**In scope:**
+
+- Retain the exact original file bytes, applied file bytes, repository identity,
+  validated relative path, and hashes after a successful one-file apply.
+- Show a separate `Approve one rollback` checkbox and
+  `Rollback applied patch` action.
+- Consume rollback approval before attempting any repository operation.
+- Immediately before rollback, revalidate the selected repository, root
+  containment, link safety, file path, and exact applied-byte snapshot.
+- Reject rollback without writing when the repository changed, the file was
+  externally edited, the path became unsafe, or the snapshot is unavailable.
+- Atomically restore the exact original bytes, preserving encoding, BOM, and
+  line endings.
+- Run protected Git diff/status confirmation after restoration and retain the
+  result in the current-session audit.
+- Invalidate rollback availability after successful rollback, repository
+  change, another patch apply, or application restart.
+
+**Safety boundaries:**
+
+- Roll back only the latest successfully applied single-file patch.
+- Never use Git reset, checkout, commit, push, arbitrary shell commands, or
+  model-directed rollback actions.
+- Never repair, guess, or broaden a stale rollback record.
+- Failure or cancellation must not perform a hidden fallback write.
+
+**Acceptance criteria:**
+
+- Test exact-byte restoration, approval consumption, external-edit rejection,
+  repository/path/link mismatch rejection, cancellation, audit evidence, and
+  rollback invalidation.
+- Release build, all existing tests, new rollback tests, `git diff --check`,
+  and final-diff review must pass.
+- A disposable repository must prove approved `BEFORE -> AFTER` apply,
+  approved `AFTER -> BEFORE` rollback, and a clean final Git state.
+
+**Out of scope:** automatic rollback, rollback after restart, multi-file
+rollback, persistent undo history, Git reset/checkout, commits, pushes,
+arbitrary shell access, package restore, and unattended/model-directed actions.
+
+**Deferred to later Phase 2 sprints:** multi-file transactions, rollback after
+restart, commit, push, model-directed tools, and unattended apply.
 
 - Add one explicit `Apply approved patch` action.
 - Require a clean Git working tree or a user-chosen backup strategy.
