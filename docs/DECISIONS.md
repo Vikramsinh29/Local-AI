@@ -71,3 +71,19 @@ arithmetic. Evidence matching prevents invented source text from being
 presented as valid. A fallback may normalize leading indentation only when the
 remaining lines match uniquely and preserve their count. Phase 1 deliberately
 contains no apply or repository-write path.
+
+## D-008 — First apply capability is one-file, approval-gated, and atomic
+
+**Decision:** Sprint 2.1 may apply exactly one currently displayed preview only
+after a separate one-run approval and a clean result from the protected Git
+status tool. The write service revalidates the local Git root, shared source
+path rules, links, raw-file SHA-256 snapshot, and unique ORIGINAL text, then
+atomically replaces the file through ignored `.local-ai/apply` staging while
+preserving supported encoding/BOM and line endings.
+
+**Reason:** Restricting the first write boundary to one reviewed file keeps
+failure behavior understandable and prevents a partial multi-file change. A
+clean working tree provides an external recovery path, while snapshot and
+content checks prevent a stale preview from overwriting newer work. Automatic
+verification, multi-file transactions, and rollback UI require separate
+reviewed sprints.

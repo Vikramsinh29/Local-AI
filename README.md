@@ -17,11 +17,15 @@ an external AI service.
   without changing repository files.
 - Four fixed verification tools with fresh one-run approval, isolated build
   output, streamed results, cancellation, and a current-session audit.
+- Strict structured patch previews grounded in selected source evidence.
+- One-file patch application with a separate one-run approval, clean-Git
+  requirement, source-snapshot revalidation, and atomic replacement.
 
 The current roadmap is in [ROADMAP.md](ROADMAP.md). The active scope is Phase
-1, Sprint 1.3: strict structured patch proposals rendered as unified previews.
-Every proposal remains preview-only. Local-AI does not provide an arbitrary
-terminal and must not apply source changes, restore packages, commit, or push.
+2, Sprint 2.1: applying exactly one reviewed preview after explicit approval.
+Local-AI does not provide an arbitrary terminal and must not restore packages,
+commit, push, or apply model output that was not separately reviewed and
+approved.
 
 ## Requirements
 

@@ -516,17 +516,182 @@ public sealed class MainWindowViewModelTests
         }
     }
 
+    [Fact]
+    public async Task PatchApply_RequiresApprovalAndCleanGitThenConsumesPreview()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        FakeVerificationToolRunner runner = CreateGitStatusRunner("## main");
+        FakeRepositoryPatchService patchService = new(
+            (_, preview, _) => Task.FromResult(
+                PatchApplyResult.Success(
+                    preview.Files[0].RelativePath)));
+
+        try
+        {
+            using MainWindowViewModel viewModel =
+                await CreateViewModelWithPatchPreviewAsync(
+                    repositoryRoot,
+                    runner,
+                    patchService);
+
+            Assert.False(
+                viewModel.ApplyProposedPatchCommand.CanExecute(null));
+
+            viewModel.IsPatchApplyApproved = true;
+
+            Assert.True(
+                viewModel.ApplyProposedPatchCommand.CanExecute(null));
+
+            await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
+
+            Assert.Equal(1, runner.RunCount);
+            Assert.Equal(1, patchService.ApplyCount);
+            Assert.False(viewModel.IsPatchApplyApproved);
+            Assert.False(viewModel.HasProposedPatchPreview);
+            Assert.Empty(viewModel.ContextFiles);
+            Assert.Single(viewModel.VerificationAuditEntries);
+            Assert.Contains("verification is required", viewModel.StatusText);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task PatchApply_RejectsDirtyGitAndConsumesApprovalOnly()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        FakeVerificationToolRunner runner = CreateGitStatusRunner(
+            "## main\n M src/Program.cs");
+        FakeRepositoryPatchService patchService = new(
+            (_, _, _) => throw new InvalidOperationException(
+                "Patch service must not run for dirty Git."));
+
+        try
+        {
+            using MainWindowViewModel viewModel =
+                await CreateViewModelWithPatchPreviewAsync(
+                    repositoryRoot,
+                    runner,
+                    patchService);
+            viewModel.IsPatchApplyApproved = true;
+
+            await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
+
+            Assert.Equal(1, runner.RunCount);
+            Assert.Equal(0, patchService.ApplyCount);
+            Assert.False(viewModel.IsPatchApplyApproved);
+            Assert.True(viewModel.HasProposedPatchPreview);
+            Assert.Contains("clean Git", viewModel.StatusText);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task PatchApply_RetainsPreviewWhenSourceRevalidationFails()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        FakeVerificationToolRunner runner = CreateGitStatusRunner("## main");
+        FakeRepositoryPatchService patchService = new(
+            (_, _, _) => Task.FromResult(
+                PatchApplyResult.Failure(
+                    "The reviewed source file changed after preview.")));
+
+        try
+        {
+            using MainWindowViewModel viewModel =
+                await CreateViewModelWithPatchPreviewAsync(
+                    repositoryRoot,
+                    runner,
+                    patchService);
+            viewModel.IsPatchApplyApproved = true;
+
+            await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
+
+            Assert.Equal(1, patchService.ApplyCount);
+            Assert.True(viewModel.HasProposedPatchPreview);
+            Assert.False(viewModel.IsPatchApplyApproved);
+            Assert.Contains("changed after preview", viewModel.StatusText);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    private static FakeVerificationToolRunner CreateGitStatusRunner(
+        string output)
+    {
+        return new FakeVerificationToolRunner(
+            (tool, _, _, _, _) =>
+            {
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                return Task.FromResult(
+                    new VerificationRunResult(
+                        tool,
+                        "git status --short --branch",
+                        now,
+                        now,
+                        ExitCode: 0,
+                        WasCancelled: false,
+                        Output: output));
+            });
+    }
+
+    private static async Task<MainWindowViewModel>
+        CreateViewModelWithPatchPreviewAsync(
+            string repositoryRoot,
+            IVerificationToolRunner runner,
+            IRepositoryPatchService patchService)
+    {
+        RepositoryInfo repository = CreateRepositoryInfo(
+            repositoryRoot,
+            isGitRepository: true,
+            solutionFiles: ["Sample.slnx"]);
+        MainWindowViewModel viewModel = CreateViewModel(
+            new FakeOllamaClient(
+                (_, _) => StreamText(BuildValidPatchResponse())),
+            runner,
+            new FakeFolderPickerService(repositoryRoot),
+            new FakeRepositoryInspector(repository),
+            patchService);
+
+        await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+        viewModel.ContextFiles.Add(
+            new RepositoryContextFileViewModel(
+                new RepositoryContextFile(
+                    "src/Program.cs",
+                    "return 42;",
+                    10)));
+        viewModel.IsAgentMode = true;
+        viewModel.IsPatchPreviewRequested = true;
+        viewModel.MessageInput = "Change the return value.";
+        await viewModel.SendCommand.ExecuteAsync();
+        Assert.True(viewModel.HasProposedPatchPreview);
+        return viewModel;
+    }
+
     private static MainWindowViewModel CreateViewModel(
         IOllamaClient ollamaClient,
         IVerificationToolRunner? verificationToolRunner = null,
         IFolderPickerService? folderPickerService = null,
-        IRepositoryInspector? repositoryInspector = null)
+        IRepositoryInspector? repositoryInspector = null,
+        IRepositoryPatchService? repositoryPatchService = null)
     {
         MainWindowViewModel viewModel = new(
             ollamaClient,
             folderPickerService ?? new FakeFolderPickerService(),
             repositoryInspector ?? new FakeRepositoryInspector(),
             new FakeRepositoryFileContextService(),
+            repositoryPatchService ??
+                new FakeRepositoryPatchService(),
             verificationToolRunner ??
                 new FakeVerificationToolRunner())
         {
@@ -714,6 +879,29 @@ public sealed class MainWindowViewModelTests
                     solutionRelativePath,
                     progress,
                     cancellationToken);
+        }
+    }
+
+    private sealed class FakeRepositoryPatchService(
+        Func<
+            string,
+            ProposedPatchPreview,
+            CancellationToken,
+            Task<PatchApplyResult>>? apply = null) :
+        IRepositoryPatchService
+    {
+        public int ApplyCount { get; private set; }
+
+        public Task<PatchApplyResult> ApplyAsync(
+            string repositoryRoot,
+            ProposedPatchPreview preview,
+            CancellationToken cancellationToken = default)
+        {
+            ApplyCount++;
+
+            return apply is null
+                ? throw new NotSupportedException()
+                : apply(repositoryRoot, preview, cancellationToken);
         }
     }
 

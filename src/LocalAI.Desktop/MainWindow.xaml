@@ -369,7 +369,7 @@
                         </Border>
 
                         <Border Grid.Row="3"
-                                MaxHeight="260"
+                                MaxHeight="340"
                                 Margin="4,0,4,10"
                                 Padding="10"
                                 Background="#F4F8F2"
@@ -384,6 +384,7 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
                                 <Grid>
@@ -445,6 +446,28 @@
                                          VerticalScrollBarVisibility="Auto"
                                          Text="{Binding ProposedPatchPreview.UnifiedDiff,
                                                         Mode=OneWay}"/>
+
+                                <StackPanel Grid.Row="4"
+                                            Margin="0,9,0,0">
+                                    <TextBlock FontSize="10"
+                                               Foreground="#4D6848"
+                                               TextWrapping="Wrap"
+                                               Text="Sprint 2.1 applies one reviewed file only. Clean Git is required; approval is consumed once."/>
+
+                                    <StackPanel Margin="0,6,0,0"
+                                                HorizontalAlignment="Right"
+                                                Orientation="Horizontal">
+                                        <CheckBox Margin="0,0,12,0"
+                                                  VerticalAlignment="Center"
+                                                  Content="Approve one apply"
+                                                  IsChecked="{Binding IsPatchApplyApproved}"/>
+
+                                        <Button MinWidth="138"
+                                                Height="28"
+                                                Command="{Binding ApplyProposedPatchCommand}"
+                                                Content="Apply approved patch"/>
+                                    </StackPanel>
+                                </StackPanel>
                             </Grid>
                         </Border>
 

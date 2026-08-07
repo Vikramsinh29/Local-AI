@@ -72,6 +72,10 @@ LocalAI.Core -> no Desktop or Infrastructure dependency
   local paths to external services.
 - Repository inspection and context collection are read-only unless a future
   sprint explicitly adds a reviewed editing capability.
+- Selected-repository writes are allowed only through the dedicated patch
+  service for the exact in-memory preview after a separate one-run approval.
+  Revalidate Git state, paths, links, and the source snapshot immediately
+  before an atomic write.
 - Never edit files in a repository selected through the LocalAI UI as part
   of repository inspection or context collection.
 - Never execute commands inside a user-selected repository through read-only

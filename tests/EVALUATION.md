@@ -55,6 +55,16 @@ agent upgrades. Run the same cases before and after a proposed improvement.
 20. Accept exactly one complete marked proposal surrounded by ordinary model
     explanation, while still rejecting Markdown fences, duplicate envelopes,
     incomplete markers, and all unsafe or ungrounded changes.
+21. Keep Apply disabled until one exact preview is displayed and a separate
+    one-run approval is checked; consume approval before checking Git.
+22. Reject dirty, failed, cancelled, or structurally uncertain Git-status
+    evidence without invoking the patch write service.
+23. Reject stale source bytes, missing or ambiguous ORIGINAL text, unsafe or
+    linked paths, and non-local Git roots immediately before writing.
+24. Apply one reviewed file atomically, preserve supported BOM/encoding and
+    line endings, remove temporary staging, and clear stale AI context.
+25. Reject multi-file previews and cancellation without modifying source;
+    confirm no automatic verification, commit, push, or rollback occurs.
 
 ## Recording results
 

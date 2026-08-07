@@ -24,6 +24,7 @@ public sealed class MainWindowViewModel :
     private readonly IFolderPickerService _folderPickerService;
     private readonly IRepositoryInspector _repositoryInspector;
     private readonly IRepositoryFileContextService _repositoryFileContextService;
+    private readonly IRepositoryPatchService _repositoryPatchService;
     private readonly IVerificationToolRunner _verificationToolRunner;
     private readonly Stopwatch _stopwatch = new();
     private readonly DispatcherTimer _elapsedTimer;
@@ -53,6 +54,7 @@ public sealed class MainWindowViewModel :
         "Select a repository and approve one fixed verification command.";
     private bool _repositoryIsGit;
     private bool _isVerificationApproved;
+    private bool _isPatchApplyApproved;
     private bool _isPatchPreviewRequested;
     private bool _isRepositoryPanelOpen;
     private bool _isAgentMode;
@@ -64,6 +66,7 @@ public sealed class MainWindowViewModel :
         IFolderPickerService folderPickerService,
         IRepositoryInspector repositoryInspector,
         IRepositoryFileContextService repositoryFileContextService,
+        IRepositoryPatchService repositoryPatchService,
         IVerificationToolRunner verificationToolRunner)
     {
         _ollamaClient = ollamaClient ??
@@ -81,6 +84,10 @@ public sealed class MainWindowViewModel :
             repositoryFileContextService ??
             throw new ArgumentNullException(
                 nameof(repositoryFileContextService));
+
+        _repositoryPatchService = repositoryPatchService ??
+            throw new ArgumentNullException(
+                nameof(repositoryPatchService));
 
         _verificationToolRunner = verificationToolRunner ??
             throw new ArgumentNullException(
@@ -120,6 +127,10 @@ public sealed class MainWindowViewModel :
         DismissPatchPreviewCommand = new RelayCommand(
             DismissPatchPreview,
             () => HasProposedPatchPreview && !IsBusy);
+
+        ApplyProposedPatchCommand = new AsyncRelayCommand(
+            ApplyProposedPatchAsync,
+            CanApplyProposedPatch);
 
         CancelCommand = new RelayCommand(
             Cancel,
@@ -179,6 +190,8 @@ public sealed class MainWindowViewModel :
     public AsyncRelayCommand RunVerificationCommand { get; }
 
     public RelayCommand DismissPatchPreviewCommand { get; }
+
+    public AsyncRelayCommand ApplyProposedPatchCommand { get; }
 
     public RelayCommand CancelCommand { get; }
 
@@ -252,6 +265,7 @@ public sealed class MainWindowViewModel :
                     .NotifyCanExecuteChanged();
                 SendCommand.NotifyCanExecuteChanged();
                 RunVerificationCommand.NotifyCanExecuteChanged();
+                ApplyProposedPatchCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(AgentEvidenceText));
             }
         }
@@ -323,9 +337,9 @@ public sealed class MainWindowViewModel :
 
             UpdateVerificationReadiness();
             StatusText = value
-                ? "Agent mode is read-only and protects source files. " +
-                  "Verification " +
-                  "requires one-run approval."
+                ? "Agent mode is read-only by default and protects source " +
+                  "files. Verification and applying require separate " +
+                  "one-run approval."
                 : "Local conversation mode enabled.";
         }
     }
@@ -343,8 +357,8 @@ public sealed class MainWindowViewModel :
             ClearProposedPatchPreview();
             SendCommand.NotifyCanExecuteChanged();
             StatusText = value
-                ? "Patch preview mode enabled. Select at least one source " +
-                  "file; no changes will be applied."
+                ? "Patch preview mode enabled. Generation does not apply " +
+                  "changes; a separate approval is required later."
                 : "Agent planning mode enabled.";
         }
     }
@@ -361,7 +375,9 @@ public sealed class MainWindowViewModel :
 
             OnPropertyChanged(nameof(HasProposedPatchPreview));
             OnPropertyChanged(nameof(PatchPreviewSummaryText));
+            IsPatchApplyApproved = false;
             DismissPatchPreviewCommand.NotifyCanExecuteChanged();
+            ApplyProposedPatchCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -374,6 +390,28 @@ public sealed class MainWindowViewModel :
             : $"{ProposedPatchPreview.Files.Count} file(s) • " +
               $"+{ProposedPatchPreview.AddedLineCount} / " +
               $"-{ProposedPatchPreview.RemovedLineCount}";
+
+    public bool IsPatchApplyApproved
+    {
+        get => _isPatchApplyApproved;
+        set
+        {
+            if (!SetField(ref _isPatchApplyApproved, value))
+            {
+                return;
+            }
+
+            ApplyProposedPatchCommand.NotifyCanExecuteChanged();
+
+            if (value)
+            {
+                StatusText =
+                    "One apply is approved for this exact preview. " +
+                    "Local-AI will require clean Git and revalidate the " +
+                    "source before writing.";
+            }
+        }
+    }
 
     public VerificationToolDescriptor SelectedVerificationTool
     {
@@ -483,6 +521,7 @@ public sealed class MainWindowViewModel :
             SendCommand.NotifyCanExecuteChanged();
             RunVerificationCommand.NotifyCanExecuteChanged();
             DismissPatchPreviewCommand.NotifyCanExecuteChanged();
+            ApplyProposedPatchCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
             NewChatCommand.NotifyCanExecuteChanged();
         }
@@ -1228,6 +1267,132 @@ public sealed class MainWindowViewModel :
     private void ClearProposedPatchPreview()
     {
         ProposedPatchPreview = null;
+    }
+
+    private bool CanApplyProposedPatch()
+    {
+        return !IsBusy &&
+               IsAgentMode &&
+               IsPatchApplyApproved &&
+               _repositoryIsGit &&
+               Directory.Exists(RepositoryPath) &&
+               ProposedPatchPreview is { Files.Count: 1 };
+    }
+
+    private async Task ApplyProposedPatchAsync()
+    {
+        if (!CanApplyProposedPatch())
+        {
+            return;
+        }
+
+        ProposedPatchPreview preview = ProposedPatchPreview!;
+        ProposedPatchFile reviewedFile = preview.Files[0];
+        VerificationToolDescriptor gitStatusTool =
+            VerificationTools.Get(VerificationToolKind.GitStatus);
+
+        IsPatchApplyApproved = false;
+        _requestCancellation?.Dispose();
+        _requestCancellation = new CancellationTokenSource();
+        IsBusy = true;
+        ElapsedText = "00:00.0";
+        StatusText = "Checking clean Git state before approved apply...";
+        _stopwatch.Restart();
+        _elapsedTimer.Start();
+
+        try
+        {
+            VerificationRunResult gitStatus =
+                await _verificationToolRunner.RunAsync(
+                    VerificationToolKind.GitStatus,
+                    RepositoryPath,
+                    _repositorySolutionFile,
+                    progress: null,
+                    cancellationToken: _requestCancellation.Token);
+
+            RecordVerificationResult(gitStatusTool, gitStatus);
+
+            if (gitStatus.WasCancelled)
+            {
+                StatusText =
+                    "Approved patch apply cancelled before any source write.";
+                return;
+            }
+
+            if (!gitStatus.IsSuccess)
+            {
+                StatusText =
+                    "Approved patch apply stopped because Git status failed.";
+                return;
+            }
+
+            if (!IsCleanGitStatus(gitStatus.Output))
+            {
+                StatusText =
+                    "Approved patch apply requires a clean Git working tree.";
+                return;
+            }
+
+            PatchApplyResult result =
+                await _repositoryPatchService.ApplyAsync(
+                    RepositoryPath,
+                    preview,
+                    _requestCancellation.Token);
+
+            if (!result.IsSuccess)
+            {
+                StatusText = result.Error ??
+                    "The reviewed patch could not be applied safely.";
+                return;
+            }
+
+            Messages.Add(
+                new ChatMessageViewModel(
+                    isUser: false,
+                    $"Applied the approved patch to " +
+                    $"{result.AppliedRelativePath}." +
+                    Environment.NewLine +
+                    "Run Release build and tests before trusting the " +
+                    "change."));
+
+            ClearContextFiles();
+            StatusText =
+                $"Approved patch applied to {reviewedFile.RelativePath}. " +
+                "Source context was cleared; verification is required.";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText =
+                "Approved patch apply cancelled before completion.";
+        }
+        catch (Exception exception)
+        {
+            StatusText =
+                $"Approved patch apply failed safely: {exception.Message}";
+        }
+        finally
+        {
+            _stopwatch.Stop();
+            _elapsedTimer.Stop();
+            UpdateElapsedText();
+            IsBusy = false;
+            _requestCancellation?.Dispose();
+            _requestCancellation = null;
+        }
+    }
+
+    private static bool IsCleanGitStatus(string output)
+    {
+        string[] lines = output
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split(
+                '\n',
+                StringSplitOptions.RemoveEmptyEntries |
+                StringSplitOptions.TrimEntries);
+
+        return lines.Length == 1 &&
+               lines[0].StartsWith("## ", StringComparison.Ordinal);
     }
 
     private static void PreservePartialResponse(

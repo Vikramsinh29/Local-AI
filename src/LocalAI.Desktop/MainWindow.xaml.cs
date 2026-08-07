@@ -25,6 +25,7 @@ public partial class MainWindow : Window
             new FolderPickerService(),
             new RepositoryInspector(),
             new RepositoryFileContextService(),
+            new RepositoryPatchService(),
             new VerificationToolRunner());
 
         DataContext = _viewModel;

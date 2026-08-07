@@ -24,7 +24,7 @@ ViewModels depend on Core interfaces, never concrete Infrastructure services.
 | Area | Location | Responsibility |
 |---|---|---|
 | Contracts and models | `src/LocalAI.Core` | Interfaces, immutable models, shared rules |
-| External services | `src/LocalAI.Infrastructure` | Ollama HTTP, read-only repository/file access, and fixed verification-process execution |
+| External services | `src/LocalAI.Infrastructure` | Ollama HTTP, read-only repository/context access, fixed verification execution, and the approval-gated patch write boundary |
 | UI coordination | `src/LocalAI.Desktop/ViewModels` | Observable state, one-run approval, commands, cancellation, status, and session audit |
 | UI presentation | `src/LocalAI.Desktop` | XAML bindings and view-specific code-behind only |
 | Tests | `tests/LocalAI.Tests` | Deterministic unit and service behavior tests |
@@ -73,6 +73,23 @@ Proposed patches cross a separate model-output boundary:
   explicit `Preview only — not applied` label.
 - No Core, Infrastructure, Desktop, or model-directed code path writes the
   proposal to the selected repository during Phase 1.
+
+Approved patch application crosses a distinct Phase 2 write boundary:
+
+- Core retains the reviewed ORIGINAL, REPLACEMENT, relative path, and raw-file
+  SHA-256 snapshot in the in-memory preview and defines the patch-service
+  contract.
+- Desktop exposes a separate one-run approval and consumes it before reusing
+  the protected Git-status runner. Dirty, failed, cancelled, or structurally
+  uncertain Git output stops the apply.
+- Infrastructure accepts exactly one reviewed file, revalidates the local Git
+  root, shared path rules, links, raw-file snapshot, and unique ORIGINAL text,
+  then performs one atomic replacement through non-linked ignored
+  `.local-ai/apply` staging.
+- Supported BOM/encoding and line-ending style are preserved. Successful apply
+  clears stale source context and explicitly requires later verification.
+- Sprint 2.1 contains no multi-file transaction, automatic verification,
+  rollback UI, commit, push, arbitrary shell, or model-directed write path.
 
 ## Change rules
 

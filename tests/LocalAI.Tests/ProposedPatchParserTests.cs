@@ -44,6 +44,9 @@ public sealed class ProposedPatchParserTests : IDisposable
             file.RelativePath);
         Assert.Equal(1, file.AddedLineCount);
         Assert.Equal(1, file.RemovedLineCount);
+        Assert.Equal(OriginalText, file.OriginalText);
+        Assert.Equal(ReplacementText, file.ReplacementText);
+        Assert.Equal(64, file.SourceSha256.Length);
         Assert.Contains("--- a/src/Program.cs", result.Preview.UnifiedDiff);
         Assert.Contains("-public static int", result.Preview.UnifiedDiff);
         Assert.Contains("return 43;", result.Preview.UnifiedDiff);
