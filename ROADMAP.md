@@ -2,7 +2,8 @@
 
 **Status:** Active
 **Last updated:** 2026-08-06
-**Baseline:** `a18b286` (`main`) — .NET 10 WPF app, 42 passing tests
+**Baseline:** `3f645d7` (`main`) — Sprint 1.1 and the repository-details
+layout fix, 45 passing tests
 
 ## Purpose
 
@@ -33,7 +34,9 @@ sprint small, evidence-based, and safe.
 - Fast, Balanced, and Accurate generation profiles.
 - Read-only repository selection, tree inspection, and manually selected file
   context with secret, binary, path-containment, and size protections.
-- 42 automated tests passing at the current baseline.
+- Controlled Agent mode that produces an evidence-bounded, read-only plan and
+  explicitly states that no source changes were applied.
+- 45 automated tests passing at the current baseline.
 
 ## Roadmap
 
@@ -42,7 +45,7 @@ sprint small, evidence-based, and safe.
 **Goal:** Turn the current chat into a transparent, evidence-driven assistant
 for a selected repository, without allowing it to change anything.
 
-**Sprint 1.1 — Agent plan and evidence**
+**Sprint 1.1 — Agent plan and evidence — Complete (`5c78241`)**
 
 - Add an Agent mode alongside normal chat.
 - Let it inspect selected files and repository metadata through existing
@@ -51,7 +54,7 @@ for a selected repository, without allowing it to change anything.
   affected files, and evidence links before proposing work.
 - Display an explicit `No changes applied` status.
 
-**Sprint 1.2 — Approved verification tools**
+**Sprint 1.2 — Approved verification tools — Active**
 
 - Add a strictly allow-listed tool runner for read-only Git commands and
   configured `dotnet build`, `dotnet test`, and lint commands.
@@ -156,11 +159,17 @@ Every sprint must define:
 6. Exact verification commands and acceptance criteria.
 7. One atomic Conventional Commit after verification passes.
 
-## First Active Sprint
+## Current Active Sprint
 
-**Name:** Controlled Read-Only Agent
-**Scope:** Phase 1, Sprint 1.1 only.
+**Name:** Approved Verification Tools
+**Scope:** Phase 1, Sprint 1.2 only.
 
-Implement planning and evidence display using existing read-only repository
-services. Do not add command execution, patch application, project-memory
-persistence, arbitrary terminal access, or repository writes in this sprint.
+Add four fixed, one-run-approved tools: protected Git status, protected Git
+diff check, Release build without restore, and Release tests without build or
+restore. Build and test share ignored, isolated `.local-ai/verification`
+artifacts so verification can run while the desktop app is open; this generated
+state stays hidden from repository inspection and source context. Stream
+bounded output, support cancellation, retain a session audit, and feed retained
+results back as agent evidence. Do not add arbitrary command entry, lint without
+a repository-defined configuration, patch generation or application,
+project-memory persistence, package restore, commit, or push.

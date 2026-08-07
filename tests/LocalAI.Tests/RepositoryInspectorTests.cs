@@ -32,8 +32,13 @@ public sealed class RepositoryInspectorTests : IDisposable
         string ignoredDirectory = Path.Combine(
             _temporaryDirectory,
             "obj");
+        string localStateDirectory = Path.Combine(
+            _temporaryDirectory,
+            ".local-ai",
+            "verification");
 
         Directory.CreateDirectory(ignoredDirectory);
+        Directory.CreateDirectory(localStateDirectory);
 
         await File.WriteAllTextAsync(
             Path.Combine(_temporaryDirectory, "Sample.slnx"),
@@ -55,6 +60,12 @@ public sealed class RepositoryInspectorTests : IDisposable
             Path.Combine(
                 ignoredDirectory,
                 "Ignored.csproj"),
+            string.Empty);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(
+                localStateDirectory,
+                "Generated.csproj"),
             string.Empty);
 
         RepositoryInspector inspector = new();
@@ -99,6 +110,12 @@ public sealed class RepositoryInspectorTests : IDisposable
                     StringComparison.OrdinalIgnoreCase) ||
                 entry.RelativePath.StartsWith(
                     $"obj{Path.DirectorySeparatorChar}",
+                    StringComparison.OrdinalIgnoreCase) ||
+                entry.RelativePath.Equals(
+                    ".local-ai",
+                    StringComparison.OrdinalIgnoreCase) ||
+                entry.RelativePath.StartsWith(
+                    $".local-ai{Path.DirectorySeparatorChar}",
                     StringComparison.OrdinalIgnoreCase));
     }
 

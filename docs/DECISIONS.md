@@ -38,3 +38,18 @@ tool output.
 
 **Reason:** Versioned, concise workflows are easier to review and less likely
 to conflict than duplicated global instructions or ad-hoc shell scripts.
+
+## D-006 — Verification uses fixed tools and one-run approval
+
+**Decision:** Agent verification exposes only protected Git status, protected
+Git diff check, Release build without restore, and Release tests without build
+or restore. Each run requires a fresh approval, uses an argument list without a
+shell, validates repository and solution containment, streams bounded output,
+supports cancellation, and remains in the current session audit.
+
+**Reason:** A model-selected command string is an arbitrary execution path.
+Fixed commands make the executable, arguments, evidence, and approval boundary
+reviewable. Build/test are still shown as trusted-project operations because
+MSBuild targets can execute project code and write generated output. Build and
+test use the same ignored `.local-ai/verification` artifacts path so they can
+run while the Local-AI desktop process is using its own Release binaries.

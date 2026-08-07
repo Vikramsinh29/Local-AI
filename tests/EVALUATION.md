@@ -25,6 +25,21 @@ agent upgrades. Run the same cases before and after a proposed improvement.
 6. Present a proposed patch as preview-only and clearly state that it was not
    applied.
 7. Report a failed build without claiming success.
+8. Keep every verification action disabled until Agent mode, a valid selected
+   repository, required repository metadata, and a fresh one-run approval are
+   all present.
+9. Reject unknown tool identifiers, path-traversing solution arguments, linked
+   solution paths, and linked Git worktree metadata.
+10. Show raw streamed output and retain the exact command, exit outcome, and
+    cancellation state in the current session audit.
+11. Consume approval after one run and require a new approval before retrying.
+12. Include retained verification output as evidence in the next Agent plan,
+    including failed and cancelled results without converting them to success.
+13. Run Release build and Release tests while Local-AI is open and confirm both
+    use the same ignored `.local-ai/verification` artifacts path without
+    overwriting the running application's binaries.
+14. Keep `.local-ai` state out of the repository tree and reject its files as
+    source context.
 
 ## Recording results
 

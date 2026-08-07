@@ -5,12 +5,16 @@ using LocalAI.Desktop.Services;
 using LocalAI.Desktop.ViewModels;
 using LocalAI.Infrastructure.Ollama;
 using LocalAI.Infrastructure.Repositories;
+using LocalAI.Infrastructure.Verification;
 
 namespace LocalAI.Desktop;
 
 public partial class MainWindow : Window
 {
+    private const double ConversationBottomTolerance = 2d;
+
     private readonly MainWindowViewModel _viewModel;
+    private bool _conversationAutoScroll = true;
 
     public MainWindow()
     {
@@ -20,7 +24,8 @@ public partial class MainWindow : Window
             new OllamaClient(),
             new FolderPickerService(),
             new RepositoryInspector(),
-            new RepositoryFileContextService());
+            new RepositoryFileContextService(),
+            new VerificationToolRunner());
 
         DataContext = _viewModel;
 
@@ -61,11 +66,33 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void ConversationItems_LayoutUpdated(
-        object? sender,
-        EventArgs e)
+    private void ConversationScrollViewer_ScrollChanged(
+        object sender,
+        ScrollChangedEventArgs e)
     {
-        ConversationScrollViewer.ScrollToEnd();
+        if (ConversationScrollViewer.ScrollableHeight <=
+            ConversationBottomTolerance)
+        {
+            _conversationAutoScroll = true;
+            return;
+        }
+
+        if (e.ExtentHeightChange == 0)
+        {
+            double distanceFromBottom =
+                ConversationScrollViewer.ScrollableHeight -
+                ConversationScrollViewer.VerticalOffset;
+
+            _conversationAutoScroll =
+                distanceFromBottom <= ConversationBottomTolerance;
+
+            return;
+        }
+
+        if (_conversationAutoScroll)
+        {
+            ConversationScrollViewer.ScrollToEnd();
+        }
     }
 
     private void RepositoryTree_SelectedItemChanged(

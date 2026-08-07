@@ -38,6 +38,7 @@ public sealed class RepositoryFileContextServiceTests : IDisposable
     [InlineData("image.png")]
     [InlineData("Generated.g.cs")]
     [InlineData("obj/Generated.cs")]
+    [InlineData(".local-ai/verification/Generated.cs")]
     public async Task ReadAsync_RejectsBinaryAndGeneratedFiles(
         string relativePath)
     {

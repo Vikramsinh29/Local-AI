@@ -10,7 +10,8 @@ public sealed class RepositoryFileContextService :
     private static readonly HashSet<string> ExcludedDirectories =
         new(StringComparer.OrdinalIgnoreCase)
         {
-            ".git", ".vs", "bin", "obj", "node_modules", "artifacts"
+            ".git", ".local-ai", ".vs", "bin", "obj", "node_modules",
+            "artifacts"
         };
 
     private static readonly HashSet<string> BinaryExtensions =

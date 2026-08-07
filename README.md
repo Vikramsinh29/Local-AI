@@ -13,10 +13,14 @@ an external AI service.
 - Read-only repository selection, tree inspection, and selected-file context.
 - Repository safety controls for secrets, binary/generated files, paths outside
   the selected root, linked roots, and oversized context.
+- Controlled Agent mode that creates an evidence-based implementation plan
+  without changing repository files.
 
 The current roadmap is in [ROADMAP.md](ROADMAP.md). The active scope is Phase
-1, Sprint 1.1: a controlled read-only agent that plans work and displays its
-evidence. It must not modify a selected repository.
+1, Sprint 1.2: four fixed verification tools with explicit one-run approval,
+streamed output, cancellation, and a session audit. It does not provide an
+arbitrary terminal and must not apply source changes, restore packages, commit,
+or push.
 
 ## Requirements
 

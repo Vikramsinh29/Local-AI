@@ -17,12 +17,17 @@ public sealed class MainWindowViewModel :
     INotifyPropertyChanged,
     IDisposable
 {
+    private const int MaximumDisplayedVerificationCharacters = 50_000;
+    private const int MaximumVerificationAuditEntries = 20;
+
     private readonly IOllamaClient _ollamaClient;
     private readonly IFolderPickerService _folderPickerService;
     private readonly IRepositoryInspector _repositoryInspector;
     private readonly IRepositoryFileContextService _repositoryFileContextService;
+    private readonly IVerificationToolRunner _verificationToolRunner;
     private readonly Stopwatch _stopwatch = new();
     private readonly DispatcherTimer _elapsedTimer;
+    private readonly List<VerificationRunResult> _verificationRuns = [];
 
     private string? _selectedModel;
     private GenerationProfile _selectedGenerationProfile =
@@ -36,6 +41,17 @@ public sealed class MainWindowViewModel :
         "Select a repository to add project context.";
     private RepositoryTreeItemViewModel? _selectedRepositoryItem;
     private RepositoryContextFileViewModel? _selectedContextFile;
+    private VerificationToolDescriptor _selectedVerificationTool =
+        VerificationTools.All[0];
+    private VerificationAuditEntryViewModel?
+        _selectedVerificationAuditEntry;
+    private string? _repositorySolutionFile;
+    private string _verificationOutput =
+        "No verification command has been run in this session.";
+    private string _verificationStatusText =
+        "Select a repository and approve one fixed verification command.";
+    private bool _repositoryIsGit;
+    private bool _isVerificationApproved;
     private bool _isRepositoryPanelOpen;
     private bool _isAgentMode;
     private bool _isBusy;
@@ -45,7 +61,8 @@ public sealed class MainWindowViewModel :
         IOllamaClient ollamaClient,
         IFolderPickerService folderPickerService,
         IRepositoryInspector repositoryInspector,
-        IRepositoryFileContextService repositoryFileContextService)
+        IRepositoryFileContextService repositoryFileContextService,
+        IVerificationToolRunner verificationToolRunner)
     {
         _ollamaClient = ollamaClient ??
             throw new ArgumentNullException(nameof(ollamaClient));
@@ -62,6 +79,10 @@ public sealed class MainWindowViewModel :
             repositoryFileContextService ??
             throw new ArgumentNullException(
                 nameof(repositoryFileContextService));
+
+        _verificationToolRunner = verificationToolRunner ??
+            throw new ArgumentNullException(
+                nameof(verificationToolRunner));
 
         RefreshModelsCommand = new AsyncRelayCommand(
             RefreshModelsAsync,
@@ -89,6 +110,10 @@ public sealed class MainWindowViewModel :
         SendCommand = new AsyncRelayCommand(
             SendAsync,
             CanSend);
+
+        RunVerificationCommand = new AsyncRelayCommand(
+            RunVerificationAsync,
+            CanRunVerification);
 
         CancelCommand = new RelayCommand(
             Cancel,
@@ -125,6 +150,12 @@ public sealed class MainWindowViewModel :
         get;
     } = [];
 
+    public ObservableCollection<VerificationAuditEntryViewModel>
+        VerificationAuditEntries { get; } = [];
+
+    public IReadOnlyList<VerificationToolDescriptor>
+        AvailableVerificationTools { get; } = VerificationTools.All;
+
     public AsyncRelayCommand RefreshModelsCommand { get; }
 
     public AsyncRelayCommand BrowseRepositoryCommand { get; }
@@ -138,6 +169,8 @@ public sealed class MainWindowViewModel :
     public RelayCommand RemoveSelectedContextFileCommand { get; }
 
     public AsyncRelayCommand SendCommand { get; }
+
+    public AsyncRelayCommand RunVerificationCommand { get; }
 
     public RelayCommand CancelCommand { get; }
 
@@ -210,6 +243,7 @@ public sealed class MainWindowViewModel :
                 RefreshRepositoryCommand
                     .NotifyCanExecuteChanged();
                 SendCommand.NotifyCanExecuteChanged();
+                RunVerificationCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(AgentEvidenceText));
             }
         }
@@ -270,11 +304,75 @@ public sealed class MainWindowViewModel :
 
             OnPropertyChanged(nameof(AgentEvidenceText));
             SendCommand.NotifyCanExecuteChanged();
+            IsVerificationApproved = false;
+            UpdateVerificationReadiness();
             StatusText = value
-                ? "Agent mode is read-only. Select a repository " +
-                  "and evidence files."
+                ? "Agent mode is read-only and protects source files. " +
+                  "Verification " +
+                  "requires one-run approval."
                 : "Local conversation mode enabled.";
         }
+    }
+
+    public VerificationToolDescriptor SelectedVerificationTool
+    {
+        get => _selectedVerificationTool;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+
+            if (!SetField(ref _selectedVerificationTool, value))
+            {
+                return;
+            }
+
+            IsVerificationApproved = false;
+            UpdateVerificationReadiness();
+        }
+    }
+
+    public VerificationAuditEntryViewModel?
+        SelectedVerificationAuditEntry
+    {
+        get => _selectedVerificationAuditEntry;
+        set
+        {
+            if (!SetField(
+                    ref _selectedVerificationAuditEntry,
+                    value) ||
+                value is null)
+            {
+                return;
+            }
+
+            VerificationOutput = value.Output;
+            VerificationStatusText =
+                $"{value.Outcome}: {value.Command}";
+        }
+    }
+
+    public bool IsVerificationApproved
+    {
+        get => _isVerificationApproved;
+        set
+        {
+            if (SetField(ref _isVerificationApproved, value))
+            {
+                RunVerificationCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public string VerificationOutput
+    {
+        get => _verificationOutput;
+        private set => SetField(ref _verificationOutput, value);
+    }
+
+    public string VerificationStatusText
+    {
+        get => _verificationStatusText;
+        private set => SetField(ref _verificationStatusText, value);
     }
 
     public string AgentEvidenceText
@@ -322,6 +420,7 @@ public sealed class MainWindowViewModel :
             AddSelectedFileToContextCommand.NotifyCanExecuteChanged();
             RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
             SendCommand.NotifyCanExecuteChanged();
+            RunVerificationCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
             NewChatCommand.NotifyCanExecuteChanged();
         }
@@ -358,6 +457,7 @@ public sealed class MainWindowViewModel :
         Messages.Clear();
         MessageInput = string.Empty;
         ElapsedText = string.Empty;
+        ClearVerificationHistory();
         StatusText = "New conversation started.";
         AddWelcomeMessage();
     }
@@ -422,8 +522,15 @@ public sealed class MainWindowViewModel :
                 $"{repository.SolutionFiles.Count} solution file(s) • " +
                 $"{repository.ProjectFiles.Count} project file(s)";
 
+            _repositoryIsGit = repository.IsGitRepository;
+            _repositorySolutionFile =
+                repository.SolutionFiles.Count == 1
+                    ? repository.SolutionFiles[0]
+                    : null;
+
             RepositoryTree.Clear();
             ClearContextFiles();
+            ClearVerificationHistory();
 
             foreach (RepositoryTreeNode rootEntry in
                      repository.RootEntries)
@@ -439,6 +546,7 @@ public sealed class MainWindowViewModel :
             IsRepositoryPanelOpen = true;
 
             OnPropertyChanged(nameof(AgentEvidenceText));
+            UpdateVerificationReadiness();
 
             StatusText =
                 $"Repository selected: {RepositoryName}";
@@ -449,10 +557,15 @@ public sealed class MainWindowViewModel :
             RepositoryPath = repositoryPath;
             RepositorySummary = exception.Message;
 
+            _repositoryIsGit = false;
+            _repositorySolutionFile = null;
+
             RepositoryTree.Clear();
             SelectedRepositoryItem = null;
             ClearContextFiles();
+            ClearVerificationHistory();
             OnPropertyChanged(nameof(AgentEvidenceText));
+            UpdateVerificationReadiness();
 
             StatusText = "Repository inspection failed.";
         }
@@ -525,6 +638,262 @@ public sealed class MainWindowViewModel :
                !string.IsNullOrWhiteSpace(SelectedModel) &&
                !string.IsNullOrWhiteSpace(MessageInput) &&
                (!IsAgentMode || Directory.Exists(RepositoryPath));
+    }
+
+    private bool CanRunVerification()
+    {
+        if (IsBusy ||
+            !IsAgentMode ||
+            !IsVerificationApproved ||
+            !Directory.Exists(RepositoryPath))
+        {
+            return false;
+        }
+
+        VerificationToolDescriptor tool =
+            SelectedVerificationTool;
+
+        if (tool.RequiresGitRepository && !_repositoryIsGit)
+        {
+            return false;
+        }
+
+        return !tool.RequiresSolution ||
+               !string.IsNullOrWhiteSpace(
+                   _repositorySolutionFile);
+    }
+
+    private async Task RunVerificationAsync()
+    {
+        if (!CanRunVerification())
+        {
+            return;
+        }
+
+        VerificationToolDescriptor tool =
+            SelectedVerificationTool;
+
+        IsVerificationApproved = false;
+
+        _requestCancellation?.Dispose();
+        _requestCancellation = new CancellationTokenSource();
+
+        IsBusy = true;
+        ElapsedText = "00:00.0";
+        VerificationOutput = string.Empty;
+        VerificationStatusText = $"Running {tool.Name}...";
+        StatusText = VerificationStatusText;
+
+        _stopwatch.Restart();
+        _elapsedTimer.Start();
+
+        DateTimeOffset startedAt = DateTimeOffset.Now;
+        Progress<VerificationOutputLine> progress =
+            new(AppendVerificationOutput);
+
+        try
+        {
+            VerificationRunResult result =
+                await _verificationToolRunner.RunAsync(
+                    tool.Kind,
+                    RepositoryPath,
+                    _repositorySolutionFile,
+                    progress,
+                    _requestCancellation.Token);
+
+            RecordVerificationResult(tool, result);
+
+            VerificationStatusText = result.WasCancelled
+                ? $"{tool.Name} cancelled."
+                : result.IsSuccess
+                    ? $"{tool.Name} passed."
+                    : $"{tool.Name} failed with exit code " +
+                      $"{result.ExitCode}.";
+
+            StatusText = VerificationStatusText;
+        }
+        catch (OperationCanceledException)
+        {
+            VerificationRunResult cancelled = new(
+                tool.Kind,
+                tool.Name,
+                startedAt,
+                DateTimeOffset.Now,
+                ExitCode: -1,
+                WasCancelled: true,
+                Output: VerificationOutput);
+
+            RecordVerificationResult(tool, cancelled);
+            VerificationStatusText = $"{tool.Name} cancelled.";
+            StatusText = VerificationStatusText;
+        }
+        catch (Exception exception)
+        {
+            VerificationRunResult failed = new(
+                tool.Kind,
+                $"{tool.Name} (not completed)",
+                startedAt,
+                DateTimeOffset.Now,
+                ExitCode: -1,
+                WasCancelled: false,
+                Output: exception.Message);
+
+            RecordVerificationResult(tool, failed);
+            VerificationStatusText =
+                $"{tool.Name} could not run: {exception.Message}";
+            StatusText = "Verification failed to start.";
+        }
+        finally
+        {
+            _stopwatch.Stop();
+            _elapsedTimer.Stop();
+            UpdateElapsedText();
+
+            IsBusy = false;
+
+            _requestCancellation?.Dispose();
+            _requestCancellation = null;
+        }
+    }
+
+    private void AppendVerificationOutput(
+        VerificationOutputLine line)
+    {
+        string formatted = line.IsError
+            ? $"[stderr] {line.Text}"
+            : line.Text;
+
+        if (VerificationOutput.Contains(
+                "[Live output truncated by Local-AI]",
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        int required = formatted.Length +
+                       Environment.NewLine.Length;
+
+        if (VerificationOutput.Length + required >
+            MaximumDisplayedVerificationCharacters)
+        {
+            VerificationOutput +=
+                Environment.NewLine +
+                "[Live output truncated by Local-AI]";
+            return;
+        }
+
+        VerificationOutput = string.IsNullOrEmpty(
+            VerificationOutput)
+                ? formatted
+                : VerificationOutput +
+                  Environment.NewLine +
+                  formatted;
+    }
+
+    private void RecordVerificationResult(
+        VerificationToolDescriptor tool,
+        VerificationRunResult result)
+    {
+        _verificationRuns.Add(result);
+
+        if (_verificationRuns.Count > MaximumVerificationAuditEntries)
+        {
+            _verificationRuns.RemoveAt(0);
+        }
+
+        VerificationAuditEntryViewModel entry =
+            new(tool, result);
+
+        VerificationAuditEntries.Insert(0, entry);
+
+        if (VerificationAuditEntries.Count >
+            MaximumVerificationAuditEntries)
+        {
+            VerificationAuditEntries.RemoveAt(
+                VerificationAuditEntries.Count - 1);
+        }
+
+        SelectedVerificationAuditEntry = entry;
+        VerificationOutput = LimitVerificationOutput(result.Output);
+    }
+
+    private static string LimitVerificationOutput(string output)
+    {
+        if (output.Length <= MaximumDisplayedVerificationCharacters)
+        {
+            return output;
+        }
+
+        return output[..MaximumDisplayedVerificationCharacters] +
+               Environment.NewLine +
+               "[Displayed output truncated by Local-AI]";
+    }
+
+    private void ClearVerificationHistory()
+    {
+        _verificationRuns.Clear();
+        VerificationAuditEntries.Clear();
+        _selectedVerificationAuditEntry = null;
+        OnPropertyChanged(nameof(SelectedVerificationAuditEntry));
+        VerificationOutput =
+            "No verification command has been run in this session.";
+        IsVerificationApproved = false;
+        UpdateVerificationReadiness();
+    }
+
+    private void UpdateVerificationReadiness()
+    {
+        VerificationToolDescriptor tool =
+            SelectedVerificationTool;
+
+        if (!Directory.Exists(RepositoryPath))
+        {
+            VerificationStatusText =
+                "Select a repository before running verification.";
+        }
+        else if (tool.RequiresGitRepository && !_repositoryIsGit)
+        {
+            VerificationStatusText =
+                "This fixed command requires a Git repository root.";
+        }
+        else if (tool.RequiresSolution &&
+                 string.IsNullOrWhiteSpace(
+                     _repositorySolutionFile))
+        {
+            VerificationStatusText =
+                "Build and test require exactly one detected solution file.";
+        }
+        else
+        {
+            string commandPreview = tool.CommandPreview.Replace(
+                "{solution}",
+                QuoteForCommandPreview(_repositorySolutionFile),
+                StringComparison.Ordinal).Replace(
+                    "{artifacts}",
+                    QuoteForCommandPreview(
+                        Path.Combine(
+                            ".local-ai",
+                            "verification")),
+                    StringComparison.Ordinal);
+
+            VerificationStatusText =
+                $"{tool.Description} Will run: {commandPreview}. " +
+                "Approve one run to enable it.";
+        }
+
+        RunVerificationCommand.NotifyCanExecuteChanged();
+    }
+
+    private static string QuoteForCommandPreview(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "<single detected solution>";
+        }
+
+        return value.Contains(' ')
+            ? $"\"{value}\""
+            : value;
     }
 
     private bool CanAddSelectedFileToContext()
@@ -622,7 +991,8 @@ public sealed class MainWindowViewModel :
                     RepositorySummary,
                     ContextFiles.Select(file => file.File),
                     SelectedGenerationProfile
-                        .MaximumRepositoryContextTokens)
+                        .MaximumRepositoryContextTokens,
+                    _verificationRuns)
                 : RepositoryContextPromptBuilder.Build(
                     prompt,
                     ContextFiles.Select(file => file.File),
@@ -744,7 +1114,7 @@ public sealed class MainWindowViewModel :
             return;
         }
 
-        StatusText = "Cancelling request...";
+        StatusText = "Cancelling current operation...";
         _requestCancellation.Cancel();
     }
 

@@ -171,10 +171,10 @@
             <ScrollViewer x:Name="ConversationScrollViewer"
                           Grid.Row="1"
                           Padding="30,24"
-                          VerticalScrollBarVisibility="Auto">
+                          VerticalScrollBarVisibility="Auto"
+                          ScrollChanged="ConversationScrollViewer_ScrollChanged">
                 <ItemsControl x:Name="ConversationItems"
-                              ItemsSource="{Binding Messages}"
-                              LayoutUpdated="ConversationItems_LayoutUpdated">
+                              ItemsSource="{Binding Messages}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Border x:Name="MessageBubble"
@@ -235,6 +235,7 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <Grid Margin="4,0,4,8">
@@ -268,7 +269,7 @@
                                 <TextBlock FontSize="11"
                                            FontWeight="SemiBold"
                                            Foreground="#654F00"
-                                           Text="Read-only agent • No changes applied"/>
+                                           Text="Controlled agent • No source patch applied"/>
 
                                 <TextBlock Margin="0,4,0,0"
                                            FontSize="10"
@@ -278,8 +279,91 @@
                             </StackPanel>
                         </Border>
 
+                        <Border Grid.Row="2"
+                                Margin="4,0,4,10"
+                                Padding="10"
+                                Background="#F5F7FA"
+                                BorderBrush="#CBD3DD"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Visibility="{Binding IsAgentMode,
+                                    Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="#303640"
+                                           Text="Approved verification tools • No shell access"/>
+
+                                <TextBlock Margin="0,4,0,8"
+                                           FontSize="10"
+                                           Foreground="#59616D"
+                                           TextWrapping="Wrap"
+                                           Text="Fixed commands only. Build/test may execute trusted project targets. Binaries use isolated .local-ai/verification artifacts; package restore is disabled."/>
+
+                                <ComboBox Height="30"
+                                          DisplayMemberPath="Name"
+                                          ItemsSource="{Binding AvailableVerificationTools}"
+                                          SelectedItem="{Binding SelectedVerificationTool}"
+                                          IsEnabled="{Binding IsNotBusy}"/>
+
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <CheckBox VerticalAlignment="Center"
+                                              Content="Approve one run"
+                                              IsChecked="{Binding IsVerificationApproved}"
+                                              IsEnabled="{Binding IsNotBusy}"/>
+
+                                    <Button Grid.Column="1"
+                                            MinWidth="112"
+                                            Height="30"
+                                            Margin="10,0,0,0"
+                                            Padding="10,4"
+                                            Command="{Binding RunVerificationCommand}"
+                                            Content="Run verification"/>
+                                </Grid>
+
+                                <TextBlock Margin="0,8,0,0"
+                                           FontSize="10"
+                                           Foreground="#59616D"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding VerificationStatusText}"/>
+
+                                <TextBox MinHeight="54"
+                                         MaxHeight="110"
+                                         Margin="0,8,0,0"
+                                         Padding="8"
+                                         IsReadOnly="True"
+                                         FontFamily="Consolas"
+                                         FontSize="10"
+                                         TextWrapping="NoWrap"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         VerticalScrollBarVisibility="Auto"
+                                         Text="{Binding VerificationOutput,
+                                                        Mode=OneWay}"/>
+
+                                <ListBox Height="56"
+                                         Margin="0,8,0,0"
+                                         ItemsSource="{Binding VerificationAuditEntries}"
+                                         SelectedItem="{Binding SelectedVerificationAuditEntry}"
+                                         ToolTip="Select a run to inspect its retained output">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Padding="3,2"
+                                                       FontSize="10"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Text="{Binding Summary}"/>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </StackPanel>
+                        </Border>
+
                         <TextBox x:Name="MessageInputTextBox"
-                                 Grid.Row="2"
+                                 Grid.Row="3"
                                  MinHeight="54"
                                  MaxHeight="160"
                                  Padding="4"
@@ -293,7 +377,7 @@
                                  Text="{Binding MessageInput,
                                                 UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <Grid Grid.Row="3"
+                        <Grid Grid.Row="4"
                               Margin="0,10,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>

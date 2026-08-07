@@ -11,6 +11,7 @@ public sealed class RepositoryInspector : IRepositoryInspector
         new(StringComparer.OrdinalIgnoreCase)
         {
             ".git",
+            ".local-ai",
             ".vs",
             "bin",
             "obj",

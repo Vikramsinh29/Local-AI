@@ -127,19 +127,305 @@ public sealed class MainWindowViewModelTests
             viewModel.AgentEvidenceText);
     }
 
+    [Fact]
+    public async Task VerificationCommand_RequiresApprovalAndRecordsOutput()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+
+            FakeVerificationToolRunner runner = new(
+                (tool, _, _, progress, _) =>
+                {
+                    progress?.Report(
+                        new VerificationOutputLine(
+                            "verification output",
+                            IsError: false));
+
+                    DateTimeOffset now = DateTimeOffset.UtcNow;
+
+                    return Task.FromResult(
+                        new VerificationRunResult(
+                            tool,
+                            "git status --short --branch",
+                            now,
+                            now.AddSeconds(1),
+                            ExitCode: 0,
+                            WasCancelled: false,
+                            Output: "verification output"));
+                });
+
+            using MainWindowViewModel viewModel = CreateViewModel(
+                new FakeOllamaClient((_, _) => StreamThenFail()),
+                runner,
+                new FakeFolderPickerService(repositoryRoot),
+                new FakeRepositoryInspector(repository));
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+            viewModel.IsAgentMode = true;
+
+            Assert.Contains(
+                "git -c core.fsmonitor=false status",
+                viewModel.VerificationStatusText);
+
+            Assert.False(
+                viewModel.RunVerificationCommand.CanExecute(null));
+
+            viewModel.IsVerificationApproved = true;
+
+            Assert.True(
+                viewModel.RunVerificationCommand.CanExecute(null));
+
+            await viewModel.RunVerificationCommand.ExecuteAsync();
+
+            Assert.Equal(1, runner.RunCount);
+            Assert.False(viewModel.IsVerificationApproved);
+            Assert.Single(viewModel.VerificationAuditEntries);
+            Assert.Contains(
+                "verification output",
+                viewModel.VerificationOutput);
+            Assert.Equal(
+                "Git status passed.",
+                viewModel.VerificationStatusText);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task VerificationCommand_CancelRecordsCancelledRun()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        TaskCompletionSource started =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+
+            FakeVerificationToolRunner runner = new(
+                async (tool, _, _, _, cancellationToken) =>
+                {
+                    DateTimeOffset startedAt = DateTimeOffset.UtcNow;
+                    started.SetResult();
+
+                    try
+                    {
+                        await Task.Delay(
+                            Timeout.InfiniteTimeSpan,
+                            cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+
+                    return new VerificationRunResult(
+                        tool,
+                        "git status --short --branch",
+                        startedAt,
+                        DateTimeOffset.UtcNow,
+                        ExitCode: -1,
+                        WasCancelled: true,
+                        Output: "cancelled output");
+                });
+
+            using MainWindowViewModel viewModel = CreateViewModel(
+                new FakeOllamaClient((_, _) => StreamThenFail()),
+                runner,
+                new FakeFolderPickerService(repositoryRoot),
+                new FakeRepositoryInspector(repository));
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+            viewModel.IsAgentMode = true;
+            viewModel.IsVerificationApproved = true;
+
+            Task run =
+                viewModel.RunVerificationCommand.ExecuteAsync();
+
+            await started.Task;
+            viewModel.CancelCommand.Execute(null);
+            await run;
+
+            Assert.False(viewModel.IsBusy);
+            Assert.Single(viewModel.VerificationAuditEntries);
+            Assert.Equal(
+                "Git status cancelled.",
+                viewModel.VerificationStatusText);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task VerificationCommand_RecordsNonzeroExitAsFailure()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+
+            FakeVerificationToolRunner runner = new(
+                (tool, _, _, _, _) =>
+                {
+                    DateTimeOffset now = DateTimeOffset.UtcNow;
+
+                    return Task.FromResult(
+                        new VerificationRunResult(
+                            tool,
+                            "git diff --check --no-ext-diff " +
+                            "--no-textconv",
+                            now,
+                            now.AddSeconds(1),
+                            ExitCode: 2,
+                            WasCancelled: false,
+                            Output: "whitespace error"));
+                });
+
+            using MainWindowViewModel viewModel = CreateViewModel(
+                new FakeOllamaClient((_, _) => StreamThenFail()),
+                runner,
+                new FakeFolderPickerService(repositoryRoot),
+                new FakeRepositoryInspector(repository));
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+            viewModel.IsAgentMode = true;
+            viewModel.SelectedVerificationTool =
+                VerificationTools.Get(
+                    VerificationToolKind.GitDiffCheck);
+            viewModel.IsVerificationApproved = true;
+
+            await viewModel.RunVerificationCommand.ExecuteAsync();
+
+            VerificationAuditEntryViewModel audit =
+                Assert.Single(viewModel.VerificationAuditEntries);
+
+            Assert.False(viewModel.IsVerificationApproved);
+            Assert.Equal("Failed (2)", audit.Outcome);
+            Assert.Contains(
+                "failed with exit code 2",
+                viewModel.VerificationStatusText,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task VerificationCommand_RejectsBuildWithoutSingleSolution()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["One.slnx", "Two.slnx"]);
+
+            FakeVerificationToolRunner runner = new(
+                (_, _, _, _, _) =>
+                    throw new InvalidOperationException(
+                        "Runner must not be called."));
+
+            using MainWindowViewModel viewModel = CreateViewModel(
+                new FakeOllamaClient((_, _) => StreamThenFail()),
+                runner,
+                new FakeFolderPickerService(repositoryRoot),
+                new FakeRepositoryInspector(repository));
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+            viewModel.IsAgentMode = true;
+            viewModel.SelectedVerificationTool =
+                VerificationTools.Get(
+                    VerificationToolKind.DotnetBuild);
+            viewModel.IsVerificationApproved = true;
+
+            Assert.False(
+                viewModel.RunVerificationCommand.CanExecute(null));
+            Assert.Contains(
+                "exactly one",
+                viewModel.VerificationStatusText,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(0, runner.RunCount);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
     private static MainWindowViewModel CreateViewModel(
-        IOllamaClient ollamaClient)
+        IOllamaClient ollamaClient,
+        IVerificationToolRunner? verificationToolRunner = null,
+        IFolderPickerService? folderPickerService = null,
+        IRepositoryInspector? repositoryInspector = null)
     {
         MainWindowViewModel viewModel = new(
             ollamaClient,
-            new FakeFolderPickerService(),
-            new FakeRepositoryInspector(),
-            new FakeRepositoryFileContextService())
+            folderPickerService ?? new FakeFolderPickerService(),
+            repositoryInspector ?? new FakeRepositoryInspector(),
+            new FakeRepositoryFileContextService(),
+            verificationToolRunner ??
+                new FakeVerificationToolRunner())
         {
             SelectedModel = "qwen2.5-coder:3b"
         };
 
         return viewModel;
+    }
+
+    private static string CreateTemporaryRepository()
+    {
+        string repositoryRoot = Path.Combine(
+            Path.GetTempPath(),
+            $"LocalAI-ViewModel-{Guid.NewGuid():N}");
+
+        Directory.CreateDirectory(repositoryRoot);
+        return repositoryRoot;
+    }
+
+    private static RepositoryInfo CreateRepositoryInfo(
+        string repositoryRoot,
+        bool isGitRepository,
+        IReadOnlyList<string> solutionFiles)
+    {
+        return new RepositoryInfo(
+            repositoryRoot,
+            isGitRepository,
+            solutionFiles,
+            [],
+            []);
+    }
+
+    private static void DeleteTemporaryRepository(
+        string repositoryRoot)
+    {
+        try
+        {
+            Directory.Delete(repositoryRoot, recursive: true);
+        }
+        catch
+        {
+            // Cleanup must not hide test results.
+        }
     }
 
     private static async IAsyncEnumerable<string> StreamUntilReleased(
@@ -200,20 +486,58 @@ public sealed class MainWindowViewModelTests
         }
     }
 
-    private sealed class FakeFolderPickerService :
+    private sealed class FakeFolderPickerService(
+        string? selectedFolder = null) :
         IFolderPickerService
     {
         public string? PickFolder(string? initialDirectory = null) =>
-            null;
+            selectedFolder;
     }
 
-    private sealed class FakeRepositoryInspector :
+    private sealed class FakeRepositoryInspector(
+        RepositoryInfo? repository = null) :
         IRepositoryInspector
     {
         public Task<RepositoryInfo> InspectAsync(
             string repositoryPath,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+            CancellationToken cancellationToken = default)
+        {
+            return repository is null
+                ? throw new NotSupportedException()
+                : Task.FromResult(repository);
+        }
+    }
+
+    private sealed class FakeVerificationToolRunner(
+        Func<
+            VerificationToolKind,
+            string,
+            string?,
+            IProgress<VerificationOutputLine>?,
+            CancellationToken,
+            Task<VerificationRunResult>>? run = null) :
+        IVerificationToolRunner
+    {
+        public int RunCount { get; private set; }
+
+        public Task<VerificationRunResult> RunAsync(
+            VerificationToolKind tool,
+            string repositoryRoot,
+            string? solutionRelativePath,
+            IProgress<VerificationOutputLine>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            RunCount++;
+
+            return run is null
+                ? throw new NotSupportedException()
+                : run(
+                    tool,
+                    repositoryRoot,
+                    solutionRelativePath,
+                    progress,
+                    cancellationToken);
+        }
     }
 
     private sealed class FakeRepositoryFileContextService :
