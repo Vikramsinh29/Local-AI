@@ -1,9 +1,9 @@
 # Local-AI Roadmap
 
 **Status:** Active
-**Last updated:** 2026-08-07
-**Baseline:** `7c89faf` (`main`) — Sprint 2.1 approval-gated single-file
-apply, 95 passing tests
+**Last updated:** 2026-08-08
+**Baseline:** `9e62121` (`main`) — Sprint 2.2 disclosed post-apply
+verification, 100 passing tests
 
 ## Purpose
 
@@ -42,7 +42,9 @@ sprint small, evidence-based, and safe.
   unified diffs.
 - Approval-gated, clean-Git, atomic single-file apply with immediate source
   revalidation and stale-context clearing.
-- 95 automated tests passing at the current baseline.
+- Disclosed post-apply Git diff check, isolated Release build, and
+  Release tests with stop-on-failure audit evidence.
+- 100 automated tests passing at the current baseline.
 
 ## Roadmap
 
@@ -100,7 +102,7 @@ for a selected repository, without allowing it to change anything.
 - Clear stale source context and require the user to run verification after a
   successful apply.
 
-**Sprint 2.2 — Disclosed post-apply verification — Active**
+**Sprint 2.2 — Disclosed post-apply verification — Complete (`9e62121`)**
 
 - Make the one-run apply approval explicitly include the fixed post-apply
   verification sequence.
@@ -195,14 +197,8 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Name:** Disclosed Post-Apply Verification
-**Scope:** Phase 2, Sprint 2.2 only.
+**Status:** None — planning checkpoint.
 
-Extend the existing one-file apply action so its approval visibly includes a
-fixed verification sequence. After a successful write, run Git diff check and,
-only when exactly one valid .NET solution is detected, the isolated Release
-build followed by Release tests. Stop after the first failed or cancelled step,
-retain each result in the session audit, never claim an unrun step passed, and
-state that a failed or cancelled verification does not roll back the applied
-source change. Do not add rollback, multi-file apply, commits, pushes,
-model-directed commands, restore, retries, project memory, or unattended apply.
+Sprint 2.2 is complete at `9e62121`. No later sprint has been approved
+or started. The next Phase 2 sprint must be defined using the Sprint Template
+before implementation begins.
