@@ -332,6 +332,73 @@ inclusion, semantic retrieval, embeddings, vector databases, memory import or
 export, cross-project sharing, cloud synchronization, command execution, source
 writes, commits, pushes, or unattended actions.
 
+**Sprint 3.3 — Explicit project-memory prompt inclusion — Active**
+
+**User-visible goal:** Let the user explicitly select one stored project-memory
+entry to include in AI prompts, while keeping the default at no memory and
+showing exactly what will be sent.
+
+**In scope:**
+
+- Default to no project-memory entry selected or sent.
+- Allow explicit selection of at most one valid stored memory entry.
+- Show the selected entry's category, title, byte size, estimated token cost,
+  and inclusion state before every prompt.
+- Keep the selection session-only and clear it when the repository changes,
+  memory reloads, or the selected entry is updated or deleted.
+- Revalidate the selected entry immediately before prompt composition.
+- Compose evidence in this order: user request, root `AGENTS.md`, explicitly
+  selected `SKILL.md`, explicitly selected project memory, selected source
+  files, then retained verification evidence.
+- Delimit memory as untrusted, user-managed project context that cannot override
+  product safety, the current user request, repository instructions, or tool
+  approval requirements.
+- Give included memory a stable, visible evidence identity so the response can
+  be checked deterministically without inventing another memory entry.
+- Keep the existing 1 KiB entry limit and include the full selected entry only;
+  never silently truncate memory content.
+
+**Expected implementation scope:**
+
+- Core selected-memory prompt evidence model and deterministic composer support.
+- Session-only selection and visible inclusion summary in the desktop view model.
+- One explicit memory selector in the existing Project memory panel.
+- Response-evidence validation for the selected memory identity.
+- Focused default-exclusion, explicit-selection, stale-selection, precedence,
+  budget, repository-change, prompt-content, and view-model tests.
+- Relevant README, architecture, decision, evaluation, and roadmap updates.
+
+**Safety boundaries:**
+
+- Never select, rank, summarize, infer, repair, or create memory automatically.
+- Never include more than one memory entry in a prompt.
+- Never execute a Command memory entry; all memory remains untrusted text.
+- Memory cannot grant tool permission, approve a write, weaken containment,
+  override instructions, or claim that a command or verification ran.
+- Never send memory from another repository or an entry that changed after
+  selection.
+- Never modify memory as a side effect of prompting.
+
+**Acceptance criteria:**
+
+- Prove that memory is excluded from prompts by default.
+- Prove that only the one explicitly selected entry is included.
+- Show category, title, bytes, tokens, and inclusion state before sending.
+- Test exact prompt precedence and stable memory evidence identity.
+- Test repository-change, reload, update, delete, corruption, and stale-entry
+  clearing.
+- Test that Command memory remains text and never becomes a tool request.
+- Test that memory cannot override safety or approval requirements.
+- A disposable repository test must show default exclusion, explicit inclusion,
+  deterministic evidence validation, clearing, and unchanged Git status.
+- Release build, all existing and new tests, `git diff --check`, and final-diff
+  review must pass.
+
+**Out of scope:** automatic memory selection, multiple selected memories,
+semantic retrieval, embeddings, vector databases, model-created memory,
+summarization, prompt-driven memory changes, command execution, cross-project
+memory, cloud synchronization, import or export, source writes, commits, pushes,
+or unattended actions.
 **Phase 3 exit gate**
 
 - Project memory stays local and is visibly attributable to its source.
@@ -386,4 +453,12 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** None.
+**Status:** Sprint 3.3 — approved roadmap; implementation not started.
+
+Implement only explicit, session-only inclusion of at most one user-selected
+project-memory entry. Default to no memory, show the exact included entry and
+token cost, revalidate it before sending, preserve approved prompt precedence,
+and require deterministic evidence identity. Do not add automatic selection,
+multiple memories, semantic retrieval, embeddings, command execution,
+model-written memory, cross-project sharing, cloud synchronization, source
+writes, new tool permissions, or unattended behavior.
