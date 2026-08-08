@@ -264,6 +264,70 @@ other instruction formats, instruction editing, skill creation, model training,
 self-modification, cloud access, new tool permissions, repository writes,
 commits, pushes, or unattended execution.
 
+**Sprint 3.2 — User-approved local project memory store — Active**
+
+**User-visible goal:** Let the user create, review, edit, and delete small
+project-specific notes that remain available after restarting Local-AI, without
+automatically sending those notes to the model.
+
+**In scope:**
+
+- Support four explicit note categories: Architecture, Command, Decision, and
+  Known issue.
+- Require the user to type the note title and content.
+- Display every stored note with category, title, byte size, estimated tokens,
+  and last-updated time.
+- Store memory outside the selected repository under
+  `%LOCALAPPDATA%\Local-AI\ProjectMemory\<repository-id>\memory.json`.
+- Derive the project identity deterministically from the validated canonical
+  repository path so different repositories never share memory.
+- Require a separate, consumed one-run approval before every create, update, or
+  delete operation.
+- Use bounded UTF-8 JSON with atomic replacement and honest corruption errors.
+- Allow at most 16 entries, 1 KiB per entry, and 8 KiB combined content.
+- Clear the displayed memory state when the selected repository changes, then
+  load only the newly selected repository memory.
+- Keep memory read-only to the model during this sprint; stored notes are not
+  added to prompts or source context.
+
+**Expected implementation scope:**
+
+- Core project-memory models, validation rules, and storage interface.
+- One local JSON persistence service using the LocalAppData directory.
+- A user-managed memory panel and one-run approval controls in the WPF view and
+  view model.
+- Focused persistence, repository-isolation, approval, corruption, budget,
+  cancellation, restart, and view-model tests.
+- Relevant README, architecture, decision, evaluation, and roadmap updates.
+
+**Safety boundaries:**
+
+- Never derive or save memory automatically from model responses or source code.
+- Never write memory inside the selected repository.
+- Never include stored memory in an AI prompt during Sprint 3.2.
+- Never execute a stored command; command entries are plain text only.
+- Never store credentials, tokens, secrets, environment values, or binary data.
+- Never repair, guess, or silently discard malformed memory data.
+- Never sync memory to Git, GitHub, a cloud service, or another repository.
+
+**Acceptance criteria:**
+
+- Test explicit approval consumption for create, update, and delete.
+- Test persistence across restart and strict separation between repositories.
+- Test atomic writes, malformed JSON, unsupported schema, duplicate identifiers,
+  oversize entries, combined-budget rejection, and cancellation.
+- Test that repository changes clear stale displayed memory.
+- Test and manually confirm that stored notes are never sent in prompts.
+- A disposable repository test must prove create, restart/load, edit, delete,
+  and an unchanged Git working tree.
+- Release build, all existing and new tests, `git diff --check`, and final-diff
+  review must pass.
+
+**Out of scope:** automatic memory creation, model-written notes, prompt
+inclusion, semantic retrieval, embeddings, vector databases, memory import or
+export, cross-project sharing, cloud synchronization, command execution, source
+writes, commits, pushes, or unattended actions.
+
 **Phase 3 exit gate**
 
 - Project memory stays local and is visibly attributable to its source.
@@ -318,8 +382,11 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** None.
+**Status:** Sprint 3.2 — approved; implementation not started.
 
-Sprint 3.1 is complete at `b5f40f7` with 124 passing tests. No implementation
-sprint is currently active. Select and approve the next narrow sprint before
-changing source files.
+Implement only the user-approved local project memory store described above.
+Allow bounded user-typed Architecture, Command, Decision, and Known issue notes
+to persist under LocalAppData with explicit one-run approval for each change.
+Do not send memory to the model, execute stored commands, write inside the
+selected repository, create memory automatically, use embeddings, synchronize
+to a cloud service, or add unattended behavior.
