@@ -2,8 +2,8 @@
 
 **Status:** Active
 **Last updated:** 2026-08-08
-**Baseline:** `9e62121` (`main`) — Sprint 2.2 disclosed post-apply
-verification, 100 passing tests
+**Baseline:** `9758287` (`main`) — Sprint 2.3 current-session rollback,
+111 passing tests
 
 ## Purpose
 
@@ -118,7 +118,7 @@ for a selected repository, without allowing it to change anything.
 - When no single solution is available, report build/tests as not run rather
   than inventing a result.
 
-**Sprint 2.3 — Explicit current-session single-file rollback — Active**
+**Sprint 2.3 — Explicit current-session single-file rollback — Complete (`9758287`)**
 
 **User-visible goal:** After one approved patch is applied, let the user
 explicitly restore that exact file to its pre-apply bytes during the current
@@ -192,7 +192,7 @@ restart, commit, push, model-directed tools, and unattended apply.
   feature work, test failure diagnosis, and release checks.
 - Let users review, edit, export, and delete all stored memory.
 
-**Sprint 3.1  Read-only project instruction manifest  Active**
+**Sprint 3.1 — Read-only project instruction manifest — Active**
 
 **User-visible goal:** Before Local-AI sends an agent prompt, show the local
 project instruction files that will be used, their precedence, size, estimated
@@ -216,6 +216,9 @@ token cost, and inclusion or exclusion reason.
 - Clear instruction selections and manifest state when the repository changes.
 - Show missing, unsafe, unsupported, or over-budget instruction files honestly
   instead of silently including or ignoring them.
+- Reject a completed agent plan when it omits an exact included instruction or
+  source path, or cites a same-extension repository path outside the displayed
+  evidence manifest.
 
 **Expected implementation scope:**
 
@@ -245,6 +248,8 @@ token cost, and inclusion or exclusion reason.
 - Test outside-root, linked, secret, binary, malformed, oversized, duplicate,
   and over-budget rejection.
 - Test prompt precedence and confirm excluded instructions are never sent.
+- Test that incomplete, abbreviated, or unlisted evidence paths cause the
+  generated plan to be withheld rather than presented as grounded.
 - A manual repository test must visibly show `AGENTS.md`, one selected skill,
   token estimates, precedence, and exclusion reasons.
 - Release build, all existing and new tests, `git diff --check`, and final-diff
@@ -310,12 +315,13 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** Sprint 2.3 — implementation approved.
+**Status:** Sprint 3.1 — implementation in progress.
 
-Implement only the latest-applied, current-session, single-file rollback
-described above. Require a separate one-run approval; revalidate the repository,
-path, links, and exact applied bytes; atomically restore the exact original
-bytes; and retain protected Git diff/status confirmation. Do not add automatic
-rollback, restart persistence, multi-file undo, Git reset/checkout, commits,
-pushes, arbitrary shell access, or model-directed rollback.
-
+Implement only the read-only project instruction manifest described above.
+Discover root `AGENTS.md` and direct `skills/<name>/SKILL.md` files, include the
+valid root rules by default, allow one explicit skill selection, show exact
+provenance and exclusion reasons, enforce the 8 KB / approximately 2,000-token
+sub-budget, and preserve the approved prompt precedence. Do not add persistent
+memory, automatic skill selection, nested or other instruction formats,
+instruction editing, new tool permissions, repository writes, commits, pushes,
+network access, or unattended execution.

@@ -24,7 +24,7 @@ ViewModels depend on Core interfaces, never concrete Infrastructure services.
 | Area | Location | Responsibility |
 |---|---|---|
 | Contracts and models | `src/LocalAI.Core` | Interfaces, immutable models, shared rules |
-| External services | `src/LocalAI.Infrastructure` | Ollama HTTP, read-only repository/context access, fixed verification execution, and the approval-gated patch write boundary |
+| External services | `src/LocalAI.Infrastructure` | Ollama HTTP, read-only repository/context and instruction-manifest access, fixed verification execution, and the approval-gated patch write boundary |
 | UI coordination | `src/LocalAI.Desktop/ViewModels` | Observable state, one-run approval, commands, cancellation, status, and session audit |
 | UI presentation | `src/LocalAI.Desktop` | XAML bindings and view-specific code-behind only |
 | Tests | `tests/LocalAI.Tests` | Deterministic unit and service behavior tests |
@@ -127,6 +127,27 @@ Current-session rollback crosses a second explicit write boundary:
   reset/checkout, persistent history, multi-file undo, commit, push, arbitrary
   command, model-directed action, or automatic rollback.
 
+Project instructions remain inside the read-only repository boundary:
+
+- Infrastructure discovers only root `AGENTS.md` and direct
+  `skills/<name>/SKILL.md` candidates. It canonicalizes paths, refuses linked
+  paths, reads only complete UTF-8 text files, and records exclusions instead
+  of silently repairing or truncating content.
+- Core deterministically includes a valid root `AGENTS.md`, permits at most one
+  explicitly selected skill, and enforces a combined 8 KB and approximately
+  2,000-token instruction budget.
+- Agent prompt evidence is ordered as user request, included `AGENTS.md`, the
+  selected included skill, selected source files, and retained verification
+  evidence. Product safety rules remain outside and above that evidence.
+- Core validates a completed agent plan against the exact instruction and
+  source paths sent with that request. Desktop withholds the plan when required
+  paths are missing or a same-extension unlisted path is cited.
+- Desktop displays path, type, byte size, token estimate, inclusion state, and
+  reason; it clears the manifest and skill selection whenever the repository is
+  reloaded or changed.
+- Sprint 3.1 adds no automatic skill selection, persistent memory, instruction
+  editing, repository writes, tools, network access, commit, or push path.
+
 ## Change rules
 
 1. Start from the smallest affected layer.
@@ -135,4 +156,3 @@ Current-session rollback crosses a second explicit write boundary:
 4. Preserve the existing UI design and binding patterns.
 5. Add focused tests for normal, rejected, cancellation, and failure paths.
 6. Verify with the commands in `README.md` before committing.
-

@@ -24,4 +24,10 @@
     <ProjectReference Include="..\..\src\LocalAI.Desktop\LocalAI.Desktop.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\src\LocalAI.Desktop\MainWindow.xaml"
+          Link="Fixtures\MainWindow.xaml"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

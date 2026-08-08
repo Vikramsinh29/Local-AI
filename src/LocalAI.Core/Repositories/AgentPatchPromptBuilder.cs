@@ -11,7 +11,8 @@ public static class AgentPatchPromptBuilder
         string repositorySummary,
         IEnumerable<RepositoryContextFile> contextFiles,
         int maximumContextTokens,
-        IEnumerable<VerificationRunResult>? verificationRuns = null)
+        IEnumerable<VerificationRunResult>? verificationRuns = null,
+        ProjectInstructionSelection? instructionSelection = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userRequest);
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryName);
@@ -37,10 +38,11 @@ public static class AgentPatchPromptBuilder
         VerificationRunResult[] retainedVerificationRuns =
             AgentVerificationEvidencePromptBuilder.RetainRecent(
                 verificationRuns);
-        string repositoryPrompt = RepositoryContextPromptBuilder.Build(
+        string repositoryPrompt = AgentEvidencePromptBuilder.Build(
             userRequest,
             files,
-            maximumContextTokens);
+            maximumContextTokens,
+            instructionSelection);
 
         StringBuilder builder = new();
         builder.AppendLine(

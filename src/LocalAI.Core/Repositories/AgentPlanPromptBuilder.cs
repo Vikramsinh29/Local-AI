@@ -11,7 +11,8 @@ public static class AgentPlanPromptBuilder
         string repositorySummary,
         IEnumerable<RepositoryContextFile> contextFiles,
         int maximumContextTokens,
-        IEnumerable<VerificationRunResult>? verificationRuns = null)
+        IEnumerable<VerificationRunResult>? verificationRuns = null,
+        ProjectInstructionSelection? instructionSelection = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userRequest);
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryName);
@@ -25,10 +26,11 @@ public static class AgentPlanPromptBuilder
             AgentVerificationEvidencePromptBuilder.RetainRecent(
                 verificationRuns);
 
-        string repositoryPrompt = RepositoryContextPromptBuilder.Build(
+        string repositoryPrompt = AgentEvidencePromptBuilder.Build(
             userRequest,
             files,
-            maximumContextTokens);
+            maximumContextTokens,
+            instructionSelection);
 
         StringBuilder builder = new();
         builder.AppendLine(
@@ -68,7 +70,9 @@ public static class AgentPlanPromptBuilder
         AppendFinalResponseRequirements(
             builder,
             userRequest,
-            retainedVerificationRuns);
+            retainedVerificationRuns,
+            files,
+            instructionSelection);
 
         return builder.ToString();
     }
@@ -76,10 +80,31 @@ public static class AgentPlanPromptBuilder
     private static void AppendFinalResponseRequirements(
         StringBuilder builder,
         string userRequest,
-        IReadOnlyList<VerificationRunResult> verificationRuns)
+        IReadOnlyList<VerificationRunResult> verificationRuns,
+        IReadOnlyList<RepositoryContextFile> sourceFiles,
+        ProjectInstructionSelection? instructionSelection)
     {
         builder.AppendLine("--- FINAL RESPONSE REQUIREMENTS ---");
         builder.AppendLine($"Answer this user request: {userRequest}");
+        builder.AppendLine(
+            "In section 2, cite every required evidence path below exactly " +
+            "and do not cite any repository path that is not listed.");
+
+        foreach (ProjectInstructionFile instruction in
+                 instructionSelection?.IncludedFiles ??
+                 Array.Empty<ProjectInstructionFile>())
+        {
+            builder.AppendLine(
+                $"Required instruction evidence path: " +
+                $"{instruction.RelativePath}");
+        }
+
+        foreach (RepositoryContextFile sourceFile in sourceFiles)
+        {
+            builder.AppendLine(
+                $"Required source evidence path: " +
+                $"{sourceFile.RelativePath}");
+        }
 
         if (verificationRuns.Count == 0)
         {

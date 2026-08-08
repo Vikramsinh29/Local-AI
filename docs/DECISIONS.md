@@ -121,3 +121,20 @@ recovery without introducing persistent undo state, multi-file transactions,
 Git reset/checkout, arbitrary commands, commits, pushes, or model-directed
 writes.
 
+## D-011 — Project instructions are explicit, bounded evidence
+
+**Decision:** Discover only repository-root `AGENTS.md` and direct
+`skills/<name>/SKILL.md` files. Include a valid root `AGENTS.md` by default,
+allow the user to select at most one skill, require complete UTF-8 files, and
+enforce a combined 8 KB / approximately 2,000-token budget. Display every
+candidate's provenance and inclusion or exclusion reason. Product safety and
+the current user request always outrank local instruction content.
+
+**Reason:** Project instructions can improve consistency without becoming a
+hidden prompt or a new authority. Explicit provenance, deterministic
+precedence, full-file budgeting, and fail-closed path/link/text checks prevent
+silent truncation, automatic skill choice, unsafe external references, and
+instruction-driven expansion of Local-AI permissions. Generated agent plans
+are also withheld when they omit an exact included instruction or source path,
+or cite a same-extension repository path outside the displayed evidence set;
+the local model is not trusted to self-certify its grounding.

@@ -96,6 +96,12 @@ LocalAI.Core -> no Desktop or Infrastructure dependency
 - Exclude generated directories and files, binary files, secrets, and files
   that exceed configured limits.
 - Apply both individual-file and total-context limits.
+- Project instruction discovery may read only repository-root `AGENTS.md` and
+  direct `skills/<name>/SKILL.md` files. Include root rules by default, require
+  an explicit choice for at most one skill, preserve visible provenance, and
+  apply the complete-file 8 KB / approximately 2,000-token sub-budget.
+- Local instruction files never override product safety or the user's current
+  request and must not add tool, write, network, commit, or push permissions.
 - Cancellation must be supported for long-running work.
 
 ## UI Rules
@@ -254,4 +260,3 @@ At completion, report:
 - any known limitation or pre-existing issue.
 
 Do not repeat completed setup or provide long generic explanations.
-

@@ -239,6 +239,7 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <Grid Margin="4,0,4,8">
@@ -288,6 +289,131 @@
                         </Border>
 
                         <Border Grid.Row="2"
+                                MaxHeight="230"
+                                Margin="4,0,4,10"
+                                Padding="10"
+                                Background="#F3F6FB"
+                                BorderBrush="#AFC0D8"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Visibility="{Binding IsAgentMode,
+                                    Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="#2E405A"
+                                           Text="Project instructions • Read-only manifest"/>
+
+                                <TextBlock Grid.Row="1"
+                                           Margin="0,4,0,0"
+                                           FontSize="9"
+                                           Foreground="#53657D"
+                                           Text="Precedence: User request → AGENTS.md → selected skill → source evidence"/>
+
+                                <TextBlock Grid.Row="2"
+                                           Margin="0,3,0,7"
+                                           FontSize="10"
+                                           Foreground="#53657D"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding InstructionManifestSummary}"/>
+
+                                <Grid Grid.Row="3"
+                                      Margin="0,0,0,7">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <ComboBox Height="28"
+                                              DisplayMemberPath="RelativePath"
+                                              ItemsSource="{Binding AvailableInstructionSkills}"
+                                              SelectedItem="{Binding SelectedInstructionSkill}"
+                                              IsEnabled="{Binding IsNotBusy}"
+                                              ToolTip="Explicitly select at most one project skill"/>
+
+                                    <Button Grid.Column="1"
+                                            MinWidth="76"
+                                            Height="28"
+                                            Margin="8,0,0,0"
+                                            Command="{Binding ClearSelectedInstructionSkillCommand}"
+                                            Content="Clear skill"/>
+                                </Grid>
+
+                                <ScrollViewer Grid.Row="4"
+                                              MaxHeight="105"
+                                              VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding ProjectInstructions}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,0,5"
+                                                        Padding="7,5"
+                                                        Background="White"
+                                                        BorderBrush="#D8E0EA"
+                                                        BorderThickness="1"
+                                                        CornerRadius="4">
+                                                    <Grid>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <TextBlock FontSize="9"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="#53657D"
+                                                                   Text="{Binding TypeText}"/>
+
+                                                        <TextBlock Grid.Column="1"
+                                                                   Margin="8,0"
+                                                                   FontSize="10"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Text="{Binding RelativePath}"/>
+
+                                                        <TextBlock Grid.Column="2"
+                                                                   FontSize="9"
+                                                                   Foreground="#53657D"
+                                                                   Text="{Binding SizeText}"/>
+
+                                                        <TextBlock Grid.Row="1"
+                                                                   Grid.ColumnSpan="3"
+                                                                   Margin="0,3,0,0"
+                                                                   FontSize="9"
+                                                                   Foreground="#53657D"
+                                                                   TextWrapping="Wrap">
+                                                            <Run Text="{Binding InclusionText, Mode=OneWay}"/>
+                                                            <Run Text=" — "/>
+                                                            <Run Text="{Binding StateReason, Mode=OneWay}"/>
+                                                        </TextBlock>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+
+                                <TextBlock Grid.Row="5"
+                                           Margin="0,2,0,0"
+                                           FontSize="9"
+                                           Foreground="#8A4B34"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding InstructionDiscoveryIssuesText}"/>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="3"
                                 Margin="4,0,4,10"
                                 Padding="10"
                                 Background="#F5F7FA"
@@ -370,7 +496,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Row="3"
+                        <Border Grid.Row="4"
                                 MaxHeight="340"
                                 Margin="4,0,4,10"
                                 Padding="10"
@@ -473,7 +599,7 @@
                             </Grid>
                         </Border>
 
-                        <Border Grid.Row="3"
+                        <Border Grid.Row="4"
                                 Margin="4,0,4,10"
                                 Padding="10"
                                 Background="#FFF7E8"
@@ -522,7 +648,7 @@
                         </Border>
 
                         <TextBox x:Name="MessageInputTextBox"
-                                 Grid.Row="4"
+                                 Grid.Row="5"
                                  MinHeight="54"
                                  MaxHeight="160"
                                  Padding="4"
@@ -536,7 +662,7 @@
                                  Text="{Binding MessageInput,
                                                 UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <Grid Grid.Row="5"
+                        <Grid Grid.Row="6"
                               Margin="0,10,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -781,4 +907,3 @@
         </Border>
     </Grid>
 </Window>
-

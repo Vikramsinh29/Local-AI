@@ -26,6 +26,7 @@ public sealed class MainWindowViewModel :
     private readonly IRepositoryFileContextService _repositoryFileContextService;
     private readonly IRepositoryPatchService _repositoryPatchService;
     private readonly IVerificationToolRunner _verificationToolRunner;
+    private readonly IProjectInstructionService _projectInstructionService;
     private readonly Stopwatch _stopwatch = new();
     private readonly DispatcherTimer _elapsedTimer;
     private readonly List<VerificationRunResult> _verificationRuns = [];
@@ -48,6 +49,15 @@ public sealed class MainWindowViewModel :
         _selectedVerificationAuditEntry;
     private ProposedPatchPreview? _proposedPatchPreview;
     private PatchRollbackRecord? _patchRollbackRecord;
+    private ProjectInstructionManifest _projectInstructionManifest =
+        ProjectInstructionManifest.Empty;
+    private ProjectInstructionSelection _projectInstructionSelection =
+        ProjectInstructionSelectionBuilder.Build(
+            ProjectInstructionManifest.Empty);
+    private ProjectInstructionItemViewModel? _selectedInstructionSkill;
+    private string _instructionManifestSummary =
+        "Select a repository to discover project instructions.";
+    private string _instructionDiscoveryIssuesText = string.Empty;
     private string? _repositorySolutionFile;
     private string _verificationOutput =
         "No verification command has been run in this session.";
@@ -69,7 +79,8 @@ public sealed class MainWindowViewModel :
         IRepositoryInspector repositoryInspector,
         IRepositoryFileContextService repositoryFileContextService,
         IRepositoryPatchService repositoryPatchService,
-        IVerificationToolRunner verificationToolRunner)
+        IVerificationToolRunner verificationToolRunner,
+        IProjectInstructionService projectInstructionService)
     {
         _ollamaClient = ollamaClient ??
             throw new ArgumentNullException(nameof(ollamaClient));
@@ -94,6 +105,10 @@ public sealed class MainWindowViewModel :
         _verificationToolRunner = verificationToolRunner ??
             throw new ArgumentNullException(
                 nameof(verificationToolRunner));
+
+        _projectInstructionService = projectInstructionService ??
+            throw new ArgumentNullException(
+                nameof(projectInstructionService));
 
         RefreshModelsCommand = new AsyncRelayCommand(
             RefreshModelsAsync,
@@ -138,6 +153,10 @@ public sealed class MainWindowViewModel :
             RollbackAppliedPatchAsync,
             CanRollbackAppliedPatch);
 
+        ClearSelectedInstructionSkillCommand = new RelayCommand(
+            ClearSelectedInstructionSkill,
+            () => SelectedInstructionSkill is not null && !IsBusy);
+
         CancelCommand = new RelayCommand(
             Cancel,
             () => IsBusy);
@@ -176,6 +195,12 @@ public sealed class MainWindowViewModel :
     public ObservableCollection<VerificationAuditEntryViewModel>
         VerificationAuditEntries { get; } = [];
 
+    public ObservableCollection<ProjectInstructionItemViewModel>
+        ProjectInstructions { get; } = [];
+
+    public ObservableCollection<ProjectInstructionItemViewModel>
+        AvailableInstructionSkills { get; } = [];
+
     public IReadOnlyList<VerificationToolDescriptor>
         AvailableVerificationTools { get; } = VerificationTools.All;
 
@@ -200,6 +225,8 @@ public sealed class MainWindowViewModel :
     public AsyncRelayCommand ApplyProposedPatchCommand { get; }
 
     public AsyncRelayCommand RollbackAppliedPatchCommand { get; }
+
+    public RelayCommand ClearSelectedInstructionSkillCommand { get; }
 
     public RelayCommand CancelCommand { get; }
 
@@ -542,8 +569,58 @@ public sealed class MainWindowViewModel :
 
             return $"Repository evidence: {RepositoryName} • " +
                    $"{RepositorySummary}{Environment.NewLine}" +
+                   $"Instructions: {InstructionManifestSummary}" +
+                   $"{Environment.NewLine}" +
                    $"Source evidence: {files}";
         }
+    }
+
+    public ProjectInstructionItemViewModel? SelectedInstructionSkill
+    {
+        get => _selectedInstructionSkill;
+        set
+        {
+            if (value is not null &&
+                (!value.IsEligible ||
+                 value.File.Kind != ProjectInstructionKind.Skill))
+            {
+                throw new ArgumentException(
+                    "Only one eligible discovered skill can be selected.",
+                    nameof(value));
+            }
+
+            if (!SetField(ref _selectedInstructionSkill, value))
+            {
+                return;
+            }
+
+            RefreshInstructionSelection();
+            ClearProposedPatchPreview();
+            ClearSelectedInstructionSkillCommand.NotifyCanExecuteChanged();
+            StatusText = value is null
+                ? "Project skill selection cleared."
+                : $"Selected project skill: {value.RelativePath}";
+        }
+    }
+
+    public string InstructionManifestSummary
+    {
+        get => _instructionManifestSummary;
+        private set
+        {
+            if (SetField(ref _instructionManifestSummary, value))
+            {
+                OnPropertyChanged(nameof(AgentEvidenceText));
+            }
+        }
+    }
+
+    public string InstructionDiscoveryIssuesText
+    {
+        get => _instructionDiscoveryIssuesText;
+        private set => SetField(
+            ref _instructionDiscoveryIssuesText,
+            value);
     }
 
     public bool IsRepositoryPanelOpen
@@ -574,6 +651,7 @@ public sealed class MainWindowViewModel :
             DismissPatchPreviewCommand.NotifyCanExecuteChanged();
             ApplyProposedPatchCommand.NotifyCanExecuteChanged();
             RollbackAppliedPatchCommand.NotifyCanExecuteChanged();
+            ClearSelectedInstructionSkillCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
             NewChatCommand.NotifyCanExecuteChanged();
         }
@@ -684,6 +762,7 @@ public sealed class MainWindowViewModel :
 
             RepositoryTree.Clear();
             ClearContextFiles();
+            ClearProjectInstructions();
             ClearVerificationHistory();
             ClearProposedPatchPreview();
             ClearPatchRollbackRecord();
@@ -700,6 +779,9 @@ public sealed class MainWindowViewModel :
                 RepositoryTree.FirstOrDefault();
 
             IsRepositoryPanelOpen = true;
+
+            await LoadProjectInstructionsAsync(
+                repository.RootPath);
 
             OnPropertyChanged(nameof(AgentEvidenceText));
             UpdateVerificationReadiness();
@@ -719,6 +801,7 @@ public sealed class MainWindowViewModel :
             RepositoryTree.Clear();
             SelectedRepositoryItem = null;
             ClearContextFiles();
+            ClearProjectInstructions();
             ClearVerificationHistory();
             ClearProposedPatchPreview();
             ClearPatchRollbackRecord();
@@ -1122,6 +1205,126 @@ public sealed class MainWindowViewModel :
         NotifyContextChanged();
     }
 
+    private async Task LoadProjectInstructionsAsync(
+        string repositoryRoot)
+    {
+        try
+        {
+            _projectInstructionManifest =
+                await _projectInstructionService.DiscoverAsync(
+                    repositoryRoot);
+
+            ProjectInstructions.Clear();
+            AvailableInstructionSkills.Clear();
+            _selectedInstructionSkill = null;
+            OnPropertyChanged(nameof(SelectedInstructionSkill));
+
+            foreach (ProjectInstructionFile file in
+                     _projectInstructionManifest.Files)
+            {
+                ProjectInstructionItemViewModel item = new(file);
+                ProjectInstructions.Add(item);
+
+                if (file.Kind == ProjectInstructionKind.Skill &&
+                    file.IsEligible)
+                {
+                    AvailableInstructionSkills.Add(item);
+                }
+            }
+
+            InstructionDiscoveryIssuesText = string.Join(
+                Environment.NewLine,
+                _projectInstructionManifest.DiscoveryIssues);
+            RefreshInstructionSelection();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            ClearProjectInstructions();
+            InstructionManifestSummary =
+                $"Instruction discovery unavailable: {exception.Message}";
+        }
+    }
+
+    private void ClearProjectInstructions()
+    {
+        _projectInstructionManifest = ProjectInstructionManifest.Empty;
+        _projectInstructionSelection =
+            ProjectInstructionSelectionBuilder.Build(
+                _projectInstructionManifest);
+        _selectedInstructionSkill = null;
+        ProjectInstructions.Clear();
+        AvailableInstructionSkills.Clear();
+        InstructionManifestSummary =
+            "No project instructions are loaded.";
+        InstructionDiscoveryIssuesText = string.Empty;
+        OnPropertyChanged(nameof(SelectedInstructionSkill));
+        ClearSelectedInstructionSkillCommand.NotifyCanExecuteChanged();
+    }
+
+    private void ClearSelectedInstructionSkill()
+    {
+        SelectedInstructionSkill = null;
+    }
+
+    private void RefreshInstructionSelection()
+    {
+        _projectInstructionSelection =
+            ProjectInstructionSelectionBuilder.Build(
+                _projectInstructionManifest,
+                SelectedInstructionSkill?.RelativePath);
+
+        Dictionary<string, ProjectInstructionSelectionItem> selectionByPath =
+            _projectInstructionSelection.Items
+                .GroupBy(
+                    item => item.File.RelativePath,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.First(),
+                    StringComparer.OrdinalIgnoreCase);
+
+        foreach (ProjectInstructionItemViewModel item in
+                 ProjectInstructions)
+        {
+            if (selectionByPath.TryGetValue(
+                    item.RelativePath,
+                    out ProjectInstructionSelectionItem? selectionItem))
+            {
+                item.ApplySelection(selectionItem);
+            }
+        }
+
+        ProjectInstructionSelectionItem? agentRules =
+            _projectInstructionSelection.Items.FirstOrDefault(
+                item => item.File.Kind ==
+                    ProjectInstructionKind.AgentRules);
+        string agentState = agentRules is null
+            ? "AGENTS.md unavailable"
+            : agentRules.IsIncluded
+                ? "AGENTS.md included"
+                : "AGENTS.md excluded";
+        string skillState = SelectedInstructionSkill is null
+            ? "no skill selected"
+            : _projectInstructionSelection.Items.Any(
+                item => item.IsIncluded &&
+                    item.File.RelativePath.Equals(
+                        SelectedInstructionSkill.RelativePath,
+                        StringComparison.OrdinalIgnoreCase))
+                ? "1 skill included"
+                : "selected skill excluded";
+
+        InstructionManifestSummary =
+            $"{agentState} • {skillState} • " +
+            $"{_projectInstructionSelection.IncludedBytes:N0} / " +
+            $"{ProjectInstructionSelectionBuilder.MaximumInstructionBytes:N0} B • " +
+            $"~{_projectInstructionSelection.IncludedTokens:N0} / " +
+            $"{ProjectInstructionSelectionBuilder.MaximumInstructionTokens:N0} tokens";
+    }
+
     private void NotifyContextChanged()
     {
         ClearProposedPatchPreview();
@@ -1145,6 +1348,12 @@ public sealed class MainWindowViewModel :
         string prompt = MessageInput.Trim();
         bool patchPreviewRequested =
             IsAgentMode && IsPatchPreviewRequested;
+        bool agentPlanRequested =
+            IsAgentMode && !patchPreviewRequested;
+        RepositoryContextFile[] promptContextFiles =
+            ContextFiles.Select(file => file.File).ToArray();
+        ProjectInstructionSelection promptInstructionSelection =
+            _projectInstructionSelection;
         string modelPrompt;
 
         try
@@ -1154,22 +1363,24 @@ public sealed class MainWindowViewModel :
                     prompt,
                     RepositoryName,
                     RepositorySummary,
-                    ContextFiles.Select(file => file.File),
+                    promptContextFiles,
                     SelectedGenerationProfile
                         .MaximumRepositoryContextTokens,
-                    _verificationRuns)
+                    _verificationRuns,
+                    promptInstructionSelection)
                 : IsAgentMode
                     ? AgentPlanPromptBuilder.Build(
                         prompt,
                         RepositoryName,
                         RepositorySummary,
-                        ContextFiles.Select(file => file.File),
+                        promptContextFiles,
                         SelectedGenerationProfile
                             .MaximumRepositoryContextTokens,
-                        _verificationRuns)
+                        _verificationRuns,
+                        promptInstructionSelection)
                 : RepositoryContextPromptBuilder.Build(
                     prompt,
-                    ContextFiles.Select(file => file.File),
+                    promptContextFiles,
                     SelectedGenerationProfile
                         .MaximumRepositoryContextTokens);
         }
@@ -1232,6 +1443,14 @@ public sealed class MainWindowViewModel :
                     responseBuilder.ToString(),
                     assistantMessage);
             }
+            else if (agentPlanRequested)
+            {
+                ProcessAgentPlanResponse(
+                    responseBuilder.ToString(),
+                    assistantMessage,
+                    promptContextFiles,
+                    promptInstructionSelection);
+            }
             else
             {
                 StatusText = "Response completed.";
@@ -1278,6 +1497,66 @@ public sealed class MainWindowViewModel :
             _requestCancellation?.Dispose();
             _requestCancellation = null;
         }
+    }
+
+    private void ProcessAgentPlanResponse(
+        string modelResponse,
+        ChatMessageViewModel assistantMessage,
+        IReadOnlyList<RepositoryContextFile> sourceFiles,
+        ProjectInstructionSelection instructionSelection)
+    {
+        AgentResponseEvidenceValidationResult validation =
+            AgentResponseEvidenceValidator.Validate(
+                modelResponse,
+                sourceFiles,
+                instructionSelection);
+
+        if (validation.IsValid)
+        {
+            assistantMessage.Content = modelResponse;
+            StatusText =
+                "Response completed. Evidence citations verified.";
+            return;
+        }
+
+        StringBuilder rejection = new();
+        rejection.AppendLine(
+            "Agent response rejected by the evidence gate.");
+        rejection.AppendLine(
+            "The model did not ground its answer in the exact displayed " +
+            "evidence paths.");
+
+        if (validation.MissingRequiredPaths.Count > 0)
+        {
+            rejection.AppendLine();
+            rejection.AppendLine("Missing required path(s):");
+
+            foreach (string path in validation.MissingRequiredPaths)
+            {
+                rejection.AppendLine($"- {path}");
+            }
+        }
+
+        if (validation.UnexpectedPaths.Count > 0)
+        {
+            rejection.AppendLine();
+            rejection.AppendLine("Unlisted path(s) cited by the model:");
+
+            foreach (string path in validation.UnexpectedPaths)
+            {
+                rejection.AppendLine($"- {path}");
+            }
+        }
+
+        rejection.AppendLine();
+        rejection.Append(
+            "The ungrounded plan was withheld. No files or repository " +
+            "state were changed.");
+
+        assistantMessage.Content = rejection.ToString();
+        StatusText =
+            "Agent response rejected because its evidence citations " +
+            "were incomplete or unlisted.";
     }
 
     private void ProcessProposedPatch(

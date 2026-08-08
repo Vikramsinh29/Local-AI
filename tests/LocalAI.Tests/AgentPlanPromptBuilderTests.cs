@@ -6,6 +6,54 @@ namespace LocalAI.Tests;
 public sealed class AgentPlanPromptBuilderTests
 {
     [Fact]
+    public void Build_RequiresExactIncludedInstructionAndSourceCitations()
+    {
+        ProjectInstructionFile agentRules = new(
+            ProjectInstructionKind.AgentRules,
+            "AGENTS.md",
+            24,
+            6,
+            "ROOT_RULES_ACTIVE",
+            ExclusionReason: null);
+        ProjectInstructionFile selectedSkill = new(
+            ProjectInstructionKind.Skill,
+            "skills/review/SKILL.md",
+            28,
+            7,
+            "REVIEW_SKILL_ACTIVE",
+            ExclusionReason: null);
+        ProjectInstructionSelection selection =
+            ProjectInstructionSelectionBuilder.Build(
+                new ProjectInstructionManifest(
+                    [agentRules, selectedSkill],
+                    []),
+                selectedSkill.RelativePath);
+
+        string prompt = AgentPlanPromptBuilder.Build(
+            "Improve the greeting.",
+            "Sample",
+            "Git repository",
+            [new RepositoryContextFile("Sample.cs", "source", 6)],
+            maximumContextTokens: 1_000,
+            instructionSelection: selection);
+
+        Assert.Contains(
+            "Required instruction evidence path: AGENTS.md",
+            prompt);
+        Assert.Contains(
+            "Required instruction evidence path: " +
+            "skills/review/SKILL.md",
+            prompt);
+        Assert.Contains(
+            "Required source evidence path: Sample.cs",
+            prompt);
+        Assert.Contains(
+            "do not cite any repository path that is not listed",
+            prompt);
+        Assert.DoesNotContain("README.md", prompt);
+    }
+
+    [Fact]
     public void Build_IncludesReadOnlyBoundaryAndEvidence()
     {
         RepositoryContextFile file =

@@ -7,6 +7,78 @@ namespace LocalAI.Tests;
 public sealed class MainWindowViewModelTests
 {
     [Fact]
+    public async Task AgentPlan_RejectsUngroundedEvidenceCitations()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        ProjectInstructionManifest manifest = new(
+            [
+                CreateInstruction(
+                    ProjectInstructionKind.AgentRules,
+                    "AGENTS.md",
+                    "AGENT_RULES"),
+                CreateInstruction(
+                    ProjectInstructionKind.Skill,
+                    "skills/review/SKILL.md",
+                    "SKILL_RULES")
+            ],
+            []);
+        FakeOllamaClient ollama = new(
+            (_, _) => StreamText(
+                "### Evidence Used\n- AGENTS.md\n- SKILL.md\n- README.md"));
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+            using MainWindowViewModel viewModel = CreateViewModel(
+                ollama,
+                folderPickerService:
+                    new FakeFolderPickerService(repositoryRoot),
+                repositoryInspector:
+                    new FakeRepositoryInspector(repository),
+                projectInstructionService:
+                    new FakeProjectInstructionService(manifest));
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+            viewModel.SelectedInstructionSkill =
+                Assert.Single(viewModel.AvailableInstructionSkills);
+            viewModel.ContextFiles.Add(
+                new RepositoryContextFileViewModel(
+                    new RepositoryContextFile(
+                        "Sample.cs",
+                        "source",
+                        6)));
+            viewModel.IsAgentMode = true;
+            viewModel.MessageInput = "Plan this work.";
+
+            await viewModel.SendCommand.ExecuteAsync();
+
+            Assert.Contains(
+                "rejected by the evidence gate",
+                viewModel.Messages[^1].Content);
+            Assert.Contains(
+                "skills/review/SKILL.md",
+                viewModel.Messages[^1].Content);
+            Assert.Contains(
+                "Sample.cs",
+                viewModel.Messages[^1].Content);
+            Assert.Contains(
+                "README.md",
+                viewModel.Messages[^1].Content);
+            Assert.Contains(
+                "rejected",
+                viewModel.StatusText,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
     public async Task SendCommand_DisplaysFirstChunkBeforeCompletion()
     {
         TaskCompletionSource firstChunkConsumed =
@@ -125,6 +197,90 @@ public sealed class MainWindowViewModelTests
         Assert.Contains(
             "No source files selected",
             viewModel.AgentEvidenceText);
+    }
+
+    [Fact]
+    public async Task ProjectInstructions_ShowManifestSelectOneSkillAndClearOnRefresh()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        ProjectInstructionManifest manifest = new(
+            [
+                CreateInstruction(
+                    ProjectInstructionKind.AgentRules,
+                    "AGENTS.md",
+                    "AGENT_RULES"),
+                CreateInstruction(
+                    ProjectInstructionKind.Skill,
+                    "skills/review/SKILL.md",
+                    "SKILL_RULES")
+            ],
+            []);
+        FakeOllamaClient ollama = new(
+            (_, _) => StreamText("plan"));
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+            using MainWindowViewModel viewModel = CreateViewModel(
+                ollama,
+                folderPickerService:
+                    new FakeFolderPickerService(repositoryRoot),
+                repositoryInspector:
+                    new FakeRepositoryInspector(repository),
+                projectInstructionService:
+                    new FakeProjectInstructionService(manifest));
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+
+            Assert.Equal(2, viewModel.ProjectInstructions.Count);
+            Assert.True(viewModel.ProjectInstructions[0].IsIncluded);
+            Assert.Contains("B", viewModel.ProjectInstructions[0].SizeText);
+            Assert.Null(viewModel.SelectedInstructionSkill);
+
+            viewModel.SelectedInstructionSkill =
+                Assert.Single(viewModel.AvailableInstructionSkills);
+
+            Assert.Equal(
+                2,
+                viewModel.ProjectInstructions.Count(item => item.IsIncluded));
+            Assert.Contains(
+                "1 skill included",
+                viewModel.InstructionManifestSummary);
+            Assert.Contains(
+                "B",
+                viewModel.InstructionManifestSummary);
+
+            viewModel.IsAgentMode = true;
+            viewModel.MessageInput = "USER_REQUEST";
+            await viewModel.SendCommand.ExecuteAsync();
+
+            int user = ollama.LastPrompt.IndexOf(
+                "USER_REQUEST",
+                StringComparison.Ordinal);
+            int agents = ollama.LastPrompt.IndexOf(
+                "AGENT_RULES",
+                StringComparison.Ordinal);
+            int skill = ollama.LastPrompt.IndexOf(
+                "SKILL_RULES",
+                StringComparison.Ordinal);
+            Assert.True(user >= 0);
+            Assert.True(agents > user);
+            Assert.True(skill > agents);
+
+            await viewModel.RefreshRepositoryCommand.ExecuteAsync();
+
+            Assert.Null(viewModel.SelectedInstructionSkill);
+            Assert.Single(
+                viewModel.ProjectInstructions,
+                item => item.IsIncluded);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
     }
 
     [Fact]
@@ -1188,7 +1344,8 @@ public sealed class MainWindowViewModelTests
         IVerificationToolRunner? verificationToolRunner = null,
         IFolderPickerService? folderPickerService = null,
         IRepositoryInspector? repositoryInspector = null,
-        IRepositoryPatchService? repositoryPatchService = null)
+        IRepositoryPatchService? repositoryPatchService = null,
+        IProjectInstructionService? projectInstructionService = null)
     {
         MainWindowViewModel viewModel = new(
             ollamaClient,
@@ -1198,7 +1355,9 @@ public sealed class MainWindowViewModelTests
             repositoryPatchService ??
                 new FakeRepositoryPatchService(),
             verificationToolRunner ??
-                new FakeVerificationToolRunner())
+                new FakeVerificationToolRunner(),
+            projectInstructionService ??
+                new FakeProjectInstructionService())
         {
             SelectedModel = "qwen2.5-coder:3b"
         };
@@ -1302,6 +1461,20 @@ public sealed class MainWindowViewModelTests
             Path.Combine("src", "Program.cs"),
             "return 42;\n"u8.ToArray(),
             "return 43;\n"u8.ToArray());
+    }
+
+    private static ProjectInstructionFile CreateInstruction(
+        ProjectInstructionKind kind,
+        string relativePath,
+        string content)
+    {
+        return new ProjectInstructionFile(
+            kind,
+            relativePath,
+            content.Length,
+            Math.Max(1, (content.Length + 3) / 4),
+            content,
+            ExclusionReason: null);
     }
 
     private static void CreatePatchSourceFile(string repositoryRoot)
@@ -1459,5 +1632,15 @@ public sealed class MainWindowViewModelTests
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
-}
 
+    private sealed class FakeProjectInstructionService(
+        ProjectInstructionManifest? manifest = null) :
+        IProjectInstructionService
+    {
+        public Task<ProjectInstructionManifest> DiscoverAsync(
+            string repositoryRoot,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(
+                manifest ?? ProjectInstructionManifest.Empty);
+    }
+}
