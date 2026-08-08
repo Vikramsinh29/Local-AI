@@ -2,8 +2,8 @@
 
 **Status:** Active
 **Last updated:** 2026-08-08
-**Baseline:** `b5f40f7` (`main`) — Sprint 3.1 read-only project instruction
-manifest, 124 passing tests
+**Baseline:** `8a8415c` (`main`) — Sprint 3.2 user-approved local project
+memory, 149 passing tests
 
 ## Purpose
 
@@ -50,7 +50,11 @@ sprint small, evidence-based, and safe.
 - Read-only project instruction manifest for root `AGENTS.md` and one explicitly
   selected `SKILL.md`, with visible precedence, budget, inclusion reasons, and
   deterministic response-evidence validation.
-- 124 automated tests passing at the current baseline.
+- User-approved local project memory for bounded Architecture, Command,
+  Decision, and Known issue notes, with atomic local JSON persistence and
+  separate consumed approval for every create, update, or delete.
+- Project memory remains excluded from AI prompts at the current baseline.
+- 149 automated tests passing at the current baseline.
 
 ## Roadmap
 
@@ -264,7 +268,7 @@ other instruction formats, instruction editing, skill creation, model training,
 self-modification, cloud access, new tool permissions, repository writes,
 commits, pushes, or unattended execution.
 
-**Sprint 3.2 — User-approved local project memory store — Active**
+**Sprint 3.2 — User-approved local project memory store — Complete (8a8415c)**
 
 **User-visible goal:** Let the user create, review, edit, and delete small
 project-specific notes that remain available after restarting Local-AI, without
@@ -382,12 +386,4 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** Sprint 3.2 — candidate implementation ready for Windows build,
-automated tests, and manual verification.
-
-Implement only the user-approved local project memory store described above.
-Allow bounded user-typed Architecture, Command, Decision, and Known issue notes
-to persist under LocalAppData with explicit one-run approval for each change.
-Do not send memory to the model, execute stored commands, write inside the
-selected repository, create memory automatically, use embeddings, synchronize
-to a cloud service, or add unattended behavior.
+**Status:** None.
