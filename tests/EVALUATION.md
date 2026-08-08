@@ -121,6 +121,22 @@ agent upgrades. Run the same cases before and after a proposed improvement.
 46. Put a unique sentinel in stored memory and confirm it never appears in an
     ordinary Agent plan prompt, structured patch prompt, or source context in
     Sprint 3.2. Confirm Command entries are displayed only and never executed.
+47. With no prompt-memory selection, confirm every stored sentinel remains
+    absent from plan and structured-patch prompts.
+48. Explicitly select one entry and confirm the UI shows its category, title,
+    bytes, tokens, included state, and stable `project-memory:<entry-id>`
+    identity while every unselected entry remains absent.
+49. Confirm prompt precedence is user request, `AGENTS.md`, selected `SKILL.md`,
+    selected project memory, source evidence, then retained verification.
+50. Change or remove the selected entry after selection and confirm immediate
+    pre-send revalidation clears it and prevents model generation.
+51. Refresh or change the repository, update the selected entry, or delete it;
+    confirm the session-only prompt selection clears in every case.
+52. Reject a response that omits or alters the selected memory identity and
+    accept it only when the exact displayed identity and other required evidence
+    are cited.
+53. Select a Command memory entry and confirm its complete text is delimited as
+    inert context and never becomes a tool request, approval, or execution.
 
 ## Recording results
 

@@ -57,6 +57,36 @@ public sealed class AgentResponseEvidenceValidatorTests
             result.UnexpectedPaths);
     }
 
+    [Fact]
+    public void Validate_RequiresExactSelectedMemoryIdentity()
+    {
+        ProjectMemoryPromptEvidence memory = new(
+            Guid.Parse("00112233-4455-6677-8899-aabbccddeeff"),
+            ProjectMemoryCategory.Decision,
+            "Decision",
+            "Use the local greeting.",
+            40,
+            10,
+            DateTimeOffset.Parse("2026-08-08T12:00:00+00:00"));
+
+        AgentResponseEvidenceValidationResult missing =
+            AgentResponseEvidenceValidator.Validate(
+                "### Evidence Used\n- Sample.cs",
+                [new RepositoryContextFile("Sample.cs", "source", 6)],
+                memoryEvidence: memory);
+        AgentResponseEvidenceValidationResult included =
+            AgentResponseEvidenceValidator.Validate(
+                $"### Evidence Used\n- Sample.cs\n- {memory.EvidenceIdentity}",
+                [new RepositoryContextFile("Sample.cs", "source", 6)],
+                memoryEvidence: memory);
+
+        Assert.False(missing.IsValid);
+        Assert.Equal(
+            new[] { memory.EvidenceIdentity },
+            missing.MissingRequiredPaths);
+        Assert.True(included.IsValid);
+    }
+
     private static ProjectInstructionSelection
         CreateInstructionSelection()
     {

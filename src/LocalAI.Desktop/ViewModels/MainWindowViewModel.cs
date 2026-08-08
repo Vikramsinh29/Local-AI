@@ -57,12 +57,16 @@ public sealed class MainWindowViewModel :
             ProjectInstructionManifest.Empty);
     private ProjectInstructionItemViewModel? _selectedInstructionSkill;
     private ProjectMemoryEntryViewModel? _selectedProjectMemoryEntry;
+    private ProjectMemoryEntryViewModel?
+        _selectedPromptProjectMemoryEntry;
     private ProjectMemoryCategory _selectedProjectMemoryCategory =
         ProjectMemoryCategory.Architecture;
     private string _projectMemoryTitle = string.Empty;
     private string _projectMemoryContent = string.Empty;
     private string _projectMemorySummary =
         "Select a repository to load local project memory.";
+    private string _projectMemoryPromptSelectionSummary =
+        "No project memory selected for AI prompts.";
     private string _projectMemoryStatusText =
         "Memory is local, user-managed, and not sent to the AI.";
     private string _projectMemoryStoragePath = string.Empty;
@@ -186,6 +190,10 @@ public sealed class MainWindowViewModel :
             ClearProjectMemoryEditor,
             () => !IsBusy);
 
+        ClearPromptProjectMemorySelectionCommand = new RelayCommand(
+            ClearPromptProjectMemorySelection,
+            () => SelectedPromptProjectMemoryEntry is not null && !IsBusy);
+
         CancelCommand = new RelayCommand(
             Cancel,
             () => IsBusy);
@@ -269,6 +277,8 @@ public sealed class MainWindowViewModel :
     public AsyncRelayCommand DeleteProjectMemoryCommand { get; }
 
     public RelayCommand ClearProjectMemoryEditorCommand { get; }
+
+    public RelayCommand ClearPromptProjectMemorySelectionCommand { get; }
 
     public RelayCommand CancelCommand { get; }
 
@@ -616,6 +626,9 @@ public sealed class MainWindowViewModel :
                    $"{RepositorySummary}{Environment.NewLine}" +
                    $"Instructions: {InstructionManifestSummary}" +
                    $"{Environment.NewLine}" +
+                   $"Project memory: " +
+                   $"{ProjectMemoryPromptSelectionSummary}" +
+                   $"{Environment.NewLine}" +
                    $"Source evidence: {files}";
         }
     }
@@ -706,6 +719,35 @@ public sealed class MainWindowViewModel :
         }
     }
 
+    public ProjectMemoryEntryViewModel? SelectedPromptProjectMemoryEntry
+    {
+        get => _selectedPromptProjectMemoryEntry;
+        set
+        {
+            if (value is not null && !ProjectMemoryEntries.Contains(value))
+            {
+                throw new ArgumentException(
+                    "Only one displayed project-memory entry can be " +
+                    "selected for a prompt.",
+                    nameof(value));
+            }
+
+            if (!SetField(ref _selectedPromptProjectMemoryEntry, value))
+            {
+                return;
+            }
+
+            ClearProposedPatchPreview();
+            UpdateProjectMemoryPromptSelectionSummary();
+            ClearPromptProjectMemorySelectionCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(AgentEvidenceText));
+            StatusText = value is null
+                ? "Project-memory prompt selection cleared."
+                : $"Selected project memory for the next agent prompt: " +
+                  $"{value.Title} ({value.Entry.Id:D}).";
+        }
+    }
+
     public string ProjectMemoryTitle
     {
         get => _projectMemoryTitle;
@@ -734,6 +776,14 @@ public sealed class MainWindowViewModel :
     {
         get => _projectMemorySummary;
         private set => SetField(ref _projectMemorySummary, value);
+    }
+
+    public string ProjectMemoryPromptSelectionSummary
+    {
+        get => _projectMemoryPromptSelectionSummary;
+        private set => SetField(
+            ref _projectMemoryPromptSelectionSummary,
+            value);
     }
 
     public string ProjectMemoryStatusText
@@ -808,6 +858,8 @@ public sealed class MainWindowViewModel :
             SaveProjectMemoryCommand.NotifyCanExecuteChanged();
             DeleteProjectMemoryCommand.NotifyCanExecuteChanged();
             ClearProjectMemoryEditorCommand.NotifyCanExecuteChanged();
+            ClearPromptProjectMemorySelectionCommand
+                .NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
             NewChatCommand.NotifyCanExecuteChanged();
         }
@@ -1496,6 +1548,7 @@ public sealed class MainWindowViewModel :
         if (!result.IsSuccess)
         {
             ProjectMemoryEntries.Clear();
+            ClearPromptProjectMemorySelection();
             SelectedProjectMemoryEntry = null;
             UpdateProjectMemorySummary();
             ProjectMemoryStatusText =
@@ -1506,9 +1559,9 @@ public sealed class MainWindowViewModel :
         ReplaceProjectMemoryEntries(result.Entries);
         ProjectMemoryStatusText = result.Entries.Count == 0
             ? "No local project memory exists for this repository. " +
-              "Memory is not sent to the AI in Sprint 3.2."
+              "No memory is selected for AI prompts."
             : "Local project memory loaded. It remains excluded from AI " +
-              "prompts in Sprint 3.2.";
+              "prompts until one entry is explicitly selected.";
     }
 
     private bool CanSaveProjectMemory()
@@ -1577,7 +1630,7 @@ public sealed class MainWindowViewModel :
             string operation = entryId is null ? "created" : "updated";
             ProjectMemoryStatusText =
                 $"Project memory {operation}. Approval consumed. " +
-                "This memory was not sent to the AI.";
+                "Prompt-memory selection was cleared.";
             StatusText = ProjectMemoryStatusText;
         }
         catch (OperationCanceledException)
@@ -1663,6 +1716,7 @@ public sealed class MainWindowViewModel :
         Guid? selectedId = null)
     {
         ProjectMemoryEntries.Clear();
+        ClearPromptProjectMemorySelection();
 
         foreach (ProjectMemoryEntry entry in entries)
         {
@@ -1690,7 +1744,9 @@ public sealed class MainWindowViewModel :
             $"{_projectMemoryService.MaximumCombinedBytes:N0} B • " +
             $"~{tokens:N0} / " +
             $"{_projectMemoryService.MaximumCombinedTokens:N0} tokens • " +
-            "not sent to AI";
+            (SelectedPromptProjectMemoryEntry is null
+                ? "no memory selected for AI"
+                : "1 memory selected for AI");
     }
 
     private void ClearProjectMemoryEditor()
@@ -1727,14 +1783,77 @@ public sealed class MainWindowViewModel :
         DeleteProjectMemoryCommand.NotifyCanExecuteChanged();
     }
 
+    private void ClearPromptProjectMemorySelection()
+    {
+        if (_selectedPromptProjectMemoryEntry is null)
+        {
+            UpdateProjectMemoryPromptSelectionSummary();
+            return;
+        }
+
+        _selectedPromptProjectMemoryEntry = null;
+        OnPropertyChanged(nameof(SelectedPromptProjectMemoryEntry));
+        UpdateProjectMemoryPromptSelectionSummary();
+        ClearPromptProjectMemorySelectionCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(AgentEvidenceText));
+        ClearProposedPatchPreview();
+    }
+
+    private void UpdateProjectMemoryPromptSelectionSummary()
+    {
+        ProjectMemoryEntryViewModel? selected =
+            SelectedPromptProjectMemoryEntry;
+        ProjectMemoryPromptSelectionSummary = selected is null
+            ? "No memory selected • not sent to AI"
+            : $"Included • {selected.CategoryText} • {selected.Title} • " +
+              $"{selected.SizeText} • " +
+              $"project-memory:{selected.Id:D}";
+        UpdateProjectMemorySummary();
+    }
+
+    private async Task<ProjectMemoryPromptEvidence?>
+        RevalidateSelectedPromptProjectMemoryAsync()
+    {
+        ProjectMemoryEntryViewModel? selected =
+            SelectedPromptProjectMemoryEntry;
+
+        if (selected is null)
+        {
+            return null;
+        }
+
+        ProjectMemoryPromptEvidence snapshot =
+            ProjectMemoryPromptEvidence.FromEntry(selected.Entry);
+        ProjectMemoryLoadResult reloaded =
+            await _projectMemoryService.LoadAsync(RepositoryPath);
+
+        ProjectMemoryEntry? current = reloaded.IsSuccess
+            ? reloaded.Entries.FirstOrDefault(entry => entry.Id == snapshot.Id)
+            : null;
+
+        if (current is null || !snapshot.Matches(current))
+        {
+            ClearPromptProjectMemorySelection();
+            ProjectMemoryStatusText = reloaded.IsSuccess
+                ? "Selected prompt memory changed or no longer exists. " +
+                  "Selection cleared; nothing was sent to the AI."
+                : $"Selected prompt memory could not be revalidated: " +
+                  $"{reloaded.Error}. Selection cleared; nothing was sent.";
+            throw new InvalidOperationException(ProjectMemoryStatusText);
+        }
+
+        return snapshot;
+    }
+
     private void ClearProjectMemory()
     {
         ProjectMemoryEntries.Clear();
+        ClearPromptProjectMemorySelection();
         ProjectMemoryStoragePath = string.Empty;
         ProjectMemorySummary =
             "Select a repository to load local project memory.";
         ProjectMemoryStatusText =
-            "Memory is local, user-managed, and not sent to the AI.";
+            "Memory is local and user-managed. No memory is selected for AI prompts.";
         ClearProjectMemoryEditor();
     }
 
@@ -1767,10 +1886,14 @@ public sealed class MainWindowViewModel :
             ContextFiles.Select(file => file.File).ToArray();
         ProjectInstructionSelection promptInstructionSelection =
             _projectInstructionSelection;
+        ProjectMemoryPromptEvidence? promptMemoryEvidence = null;
         string modelPrompt;
 
         try
         {
+            promptMemoryEvidence = IsAgentMode
+                ? await RevalidateSelectedPromptProjectMemoryAsync()
+                : null;
             modelPrompt = patchPreviewRequested
                 ? AgentPatchPromptBuilder.Build(
                     prompt,
@@ -1780,7 +1903,8 @@ public sealed class MainWindowViewModel :
                     SelectedGenerationProfile
                         .MaximumRepositoryContextTokens,
                     _verificationRuns,
-                    promptInstructionSelection)
+                    promptInstructionSelection,
+                    promptMemoryEvidence)
                 : IsAgentMode
                     ? AgentPlanPromptBuilder.Build(
                         prompt,
@@ -1790,7 +1914,8 @@ public sealed class MainWindowViewModel :
                         SelectedGenerationProfile
                             .MaximumRepositoryContextTokens,
                         _verificationRuns,
-                        promptInstructionSelection)
+                        promptInstructionSelection,
+                        promptMemoryEvidence)
                 : RepositoryContextPromptBuilder.Build(
                     prompt,
                     promptContextFiles,
@@ -1854,7 +1979,8 @@ public sealed class MainWindowViewModel :
             {
                 ProcessProposedPatch(
                     responseBuilder.ToString(),
-                    assistantMessage);
+                    assistantMessage,
+                    promptMemoryEvidence);
             }
             else if (agentPlanRequested)
             {
@@ -1862,7 +1988,8 @@ public sealed class MainWindowViewModel :
                     responseBuilder.ToString(),
                     assistantMessage,
                     promptContextFiles,
-                    promptInstructionSelection);
+                    promptInstructionSelection,
+                    promptMemoryEvidence);
             }
             else
             {
@@ -1916,13 +2043,15 @@ public sealed class MainWindowViewModel :
         string modelResponse,
         ChatMessageViewModel assistantMessage,
         IReadOnlyList<RepositoryContextFile> sourceFiles,
-        ProjectInstructionSelection instructionSelection)
+        ProjectInstructionSelection instructionSelection,
+        ProjectMemoryPromptEvidence? memoryEvidence)
     {
         AgentResponseEvidenceValidationResult validation =
             AgentResponseEvidenceValidator.Validate(
                 modelResponse,
                 sourceFiles,
-                instructionSelection);
+                instructionSelection,
+                memoryEvidence);
 
         if (validation.IsValid)
         {
@@ -1937,12 +2066,12 @@ public sealed class MainWindowViewModel :
             "Agent response rejected by the evidence gate.");
         rejection.AppendLine(
             "The model did not ground its answer in the exact displayed " +
-            "evidence paths.");
+            "evidence identifiers.");
 
         if (validation.MissingRequiredPaths.Count > 0)
         {
             rejection.AppendLine();
-            rejection.AppendLine("Missing required path(s):");
+            rejection.AppendLine("Missing required evidence:");
 
             foreach (string path in validation.MissingRequiredPaths)
             {
@@ -1974,8 +2103,32 @@ public sealed class MainWindowViewModel :
 
     private void ProcessProposedPatch(
         string modelResponse,
-        ChatMessageViewModel assistantMessage)
+        ChatMessageViewModel assistantMessage,
+        ProjectMemoryPromptEvidence? memoryEvidence)
     {
+        AgentResponseEvidenceValidationResult evidenceValidation =
+            AgentResponseEvidenceValidator.Validate(
+                modelResponse,
+                Array.Empty<RepositoryContextFile>(),
+                instructionSelection: null,
+                memoryEvidence: memoryEvidence);
+
+        if (!evidenceValidation.IsValid)
+        {
+            ProposedPatchPreview = null;
+            assistantMessage.Content =
+                modelResponse +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Patch preview rejected: the exact selected-memory " +
+                "evidence identity was not cited in the patch summary." +
+                Environment.NewLine +
+                "Preview only — no changes applied.";
+            StatusText =
+                "Patch preview rejected by the project-memory evidence gate.";
+            return;
+        }
+
         ProposedPatchParseResult result = ProposedPatchParser.Parse(
             modelResponse,
             RepositoryPath,

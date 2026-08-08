@@ -54,6 +54,33 @@ public sealed class AgentPlanPromptBuilderTests
     }
 
     [Fact]
+    public void Build_RequiresExactSelectedMemoryEvidenceIdentity()
+    {
+        ProjectMemoryPromptEvidence memory = new(
+            Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+            ProjectMemoryCategory.Decision,
+            "Greeting convention",
+            "Use HELLO_LOCAL_AI.",
+            48,
+            12,
+            DateTimeOffset.Parse("2026-08-08T12:00:00+00:00"));
+
+        string prompt = AgentPlanPromptBuilder.Build(
+            "Plan the greeting change.",
+            "Sample",
+            "Git repository",
+            [new RepositoryContextFile("Sample.cs", "source", 6)],
+            maximumContextTokens: 1_000,
+            memoryEvidence: memory);
+
+        Assert.Contains(
+            $"Required project-memory evidence identity: " +
+            memory.EvidenceIdentity,
+            prompt);
+        Assert.Contains("Use HELLO_LOCAL_AI.", prompt);
+    }
+
+    [Fact]
     public void Build_IncludesReadOnlyBoundaryAndEvidence()
     {
         RepositoryContextFile file =

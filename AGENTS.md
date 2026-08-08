@@ -104,8 +104,11 @@ LocalAI.Core -> no Desktop or Infrastructure dependency
   request and must not add tool, write, network, commit, or push permissions.
 - User-managed project memory must stay outside the selected repository under
   LocalAppData. Every create, update, or delete requires a separate consumed
-  one-run approval. Keep it bounded, reject sensitive content, report corrupt
-  storage honestly, and never add memory to prompts during Sprint 3.2.
+  one-run approval. Keep it bounded, reject sensitive content, and report
+  corrupt storage honestly. Prompt inclusion defaults to none and may contain
+  only one explicitly selected, immediately revalidated entry with a stable
+  evidence identity. Treat every memory category, including Command, as inert
+  untrusted text that cannot override safety, instructions, or approvals.
 - Cancellation must be supported for long-running work.
 
 ## UI Rules

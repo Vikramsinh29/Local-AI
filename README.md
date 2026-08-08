@@ -33,10 +33,13 @@ an external AI service.
   issue notes. Memory is stored outside the repository in LocalAppData, is
   bounded to 16 entries / 1 KiB each / 8 KiB and approximately 2,000 tokens
   combined, and requires a fresh one-run approval for every change.
+- Explicit session-only inclusion of at most one selected memory entry, with
+  default exclusion, visible category/title/byte/token provenance, immediate
+  pre-send revalidation, and deterministic response-evidence validation.
 
 The current roadmap is in [ROADMAP.md](ROADMAP.md). The active scope is Phase
-3, Sprint 3.2: user-approved local project memory that remains excluded from
-AI prompts.
+3, Sprint 3.3: explicit, revalidated inclusion of one user-selected project
+memory entry while the default remains no memory.
 Local-AI does not provide an arbitrary terminal and must not restore packages,
 commit, push, or apply model output that was not separately reviewed and
 approved.

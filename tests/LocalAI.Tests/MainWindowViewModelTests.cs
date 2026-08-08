@@ -8,7 +8,7 @@ namespace LocalAI.Tests;
 public sealed class MainWindowViewModelTests
 {
     [Fact]
-    public async Task ProjectMemory_LoadsMetadataButNeverEntersAgentPrompt()
+    public async Task ProjectMemory_DefaultSelectionNeverEntersAgentPrompt()
     {
         string repositoryRoot = CreateTemporaryRepository();
         ProjectMemoryEntry memory = CreateMemoryEntry(
@@ -40,9 +40,10 @@ public sealed class MainWindowViewModelTests
             Assert.Equal("Decision", displayed.CategoryText);
             Assert.Contains("tokens", displayed.SizeText);
             Assert.Contains(
-                "not sent to AI",
+                "no memory selected",
                 viewModel.ProjectMemorySummary,
                 StringComparison.OrdinalIgnoreCase);
+            Assert.Null(viewModel.SelectedPromptProjectMemoryEntry);
 
             viewModel.ContextFiles.Add(
                 new RepositoryContextFileViewModel(
@@ -65,6 +66,195 @@ public sealed class MainWindowViewModelTests
             Assert.DoesNotContain(
                 "MEMORY_SENTINEL_MUST_NOT_REACH_MODEL",
                 ollama.LastPrompt);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ProjectMemory_ExplicitSelectionEntersPromptInPrecedenceOrder()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        ProjectMemoryEntry memory = CreateMemoryEntry(
+            ProjectMemoryCategory.Decision,
+            "Greeting convention",
+            "MEMORY_SENTINEL_USE_HELLO_LOCAL_AI");
+        FakeProjectMemoryService memoryService = new([memory]);
+        FakeOllamaClient ollama = new(
+            (_, _) => StreamText(
+                "### Evidence Used\n" +
+                "- Sample.cs\n" +
+                $"- project-memory:{memory.Id:D}"));
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+            using MainWindowViewModel viewModel = CreateViewModel(
+                ollama,
+                folderPickerService:
+                    new FakeFolderPickerService(repositoryRoot),
+                repositoryInspector:
+                    new FakeRepositoryInspector(repository),
+                projectMemoryService: memoryService);
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+            viewModel.ContextFiles.Add(
+                new RepositoryContextFileViewModel(
+                    new RepositoryContextFile(
+                        "Sample.cs",
+                        "SOURCE_SENTINEL",
+                        15)));
+            viewModel.IsAgentMode = true;
+            viewModel.SelectedPromptProjectMemoryEntry =
+                Assert.Single(viewModel.ProjectMemoryEntries);
+            viewModel.MessageInput = "USER_SENTINEL";
+
+            await viewModel.SendCommand.ExecuteAsync();
+
+            int user = ollama.LastPrompt.IndexOf(
+                "USER_SENTINEL",
+                StringComparison.Ordinal);
+            int memoryIndex = ollama.LastPrompt.IndexOf(
+                "MEMORY_SENTINEL_USE_HELLO_LOCAL_AI",
+                StringComparison.Ordinal);
+            int source = ollama.LastPrompt.IndexOf(
+                "SOURCE_SENTINEL",
+                StringComparison.Ordinal);
+
+            Assert.True(user >= 0);
+            Assert.True(memoryIndex > user);
+            Assert.True(source > memoryIndex);
+            Assert.Contains(
+                $"project-memory:{memory.Id:D}",
+                ollama.LastPrompt);
+            Assert.Equal(2, memoryService.LoadCount);
+            Assert.Contains(
+                "verified",
+                viewModel.StatusText,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ProjectMemory_ChangedSelectionIsRejectedBeforeGeneration()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        ProjectMemoryEntry memory = CreateMemoryEntry(
+            ProjectMemoryCategory.KnownIssue,
+            "Known issue",
+            "ORIGINAL_MEMORY");
+        FakeProjectMemoryService memoryService = new([memory]);
+        FakeOllamaClient ollama = new(
+            (_, _) => StreamText("must not run"));
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+            using MainWindowViewModel viewModel = CreateViewModel(
+                ollama,
+                folderPickerService:
+                    new FakeFolderPickerService(repositoryRoot),
+                repositoryInspector:
+                    new FakeRepositoryInspector(repository),
+                projectMemoryService: memoryService);
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+            viewModel.ContextFiles.Add(
+                new RepositoryContextFileViewModel(
+                    new RepositoryContextFile(
+                        "Sample.cs",
+                        "source",
+                        6)));
+            viewModel.IsAgentMode = true;
+            viewModel.SelectedPromptProjectMemoryEntry =
+                Assert.Single(viewModel.ProjectMemoryEntries);
+            memoryService.Entries[0] = memory with
+            {
+                Content = "EXTERNALLY_CHANGED_MEMORY",
+                SizeBytes = memory.SizeBytes + 10,
+                EstimatedTokens = memory.EstimatedTokens + 3,
+                UpdatedAtUtc = memory.UpdatedAtUtc.AddSeconds(1)
+            };
+            viewModel.MessageInput = "Plan safely.";
+
+            await viewModel.SendCommand.ExecuteAsync();
+
+            Assert.Equal(0, ollama.GenerationCount);
+            Assert.Null(viewModel.SelectedPromptProjectMemoryEntry);
+            Assert.Contains(
+                "nothing was sent",
+                viewModel.ProjectMemoryStatusText,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ProjectMemory_CorruptReloadIsRejectedBeforeGeneration()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        ProjectMemoryEntry memory = CreateMemoryEntry(
+            ProjectMemoryCategory.Architecture,
+            "Layering",
+            "Keep I/O in Infrastructure.");
+        FakeProjectMemoryService memoryService = new([memory]);
+        FakeOllamaClient ollama = new(
+            (_, _) => StreamText("must not run"));
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+            using MainWindowViewModel viewModel = CreateViewModel(
+                ollama,
+                folderPickerService:
+                    new FakeFolderPickerService(repositoryRoot),
+                repositoryInspector:
+                    new FakeRepositoryInspector(repository),
+                projectMemoryService: memoryService);
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+            viewModel.ContextFiles.Add(
+                new RepositoryContextFileViewModel(
+                    new RepositoryContextFile(
+                        "Sample.cs",
+                        "source",
+                        6)));
+            viewModel.IsAgentMode = true;
+            viewModel.SelectedPromptProjectMemoryEntry =
+                Assert.Single(viewModel.ProjectMemoryEntries);
+            memoryService.LoadError = "memory.json is malformed";
+            viewModel.MessageInput = "Plan safely.";
+
+            await viewModel.SendCommand.ExecuteAsync();
+
+            Assert.Equal(0, ollama.GenerationCount);
+            Assert.Null(viewModel.SelectedPromptProjectMemoryEntry);
+            Assert.Contains(
+                "could not be revalidated",
+                viewModel.ProjectMemoryStatusText,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(
+                "nothing was sent",
+                viewModel.ProjectMemoryStatusText,
+                StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -109,6 +299,9 @@ public sealed class MainWindowViewModelTests
             Assert.False(viewModel.IsProjectMemoryChangeApproved);
             Assert.Single(viewModel.ProjectMemoryEntries);
 
+            viewModel.SelectedPromptProjectMemoryEntry =
+                viewModel.ProjectMemoryEntries[0];
+
             viewModel.ProjectMemoryTitle = "Layering";
             Assert.False(viewModel.IsProjectMemoryChangeApproved);
             viewModel.IsProjectMemoryChangeApproved = true;
@@ -116,7 +309,10 @@ public sealed class MainWindowViewModelTests
 
             Assert.Equal(1, memoryService.UpdateCount);
             Assert.False(viewModel.IsProjectMemoryChangeApproved);
+            Assert.Null(viewModel.SelectedPromptProjectMemoryEntry);
 
+            viewModel.SelectedPromptProjectMemoryEntry =
+                Assert.Single(viewModel.ProjectMemoryEntries);
             Assert.False(viewModel.DeleteProjectMemoryCommand.CanExecute(null));
             viewModel.IsProjectMemoryChangeApproved = true;
             await viewModel.DeleteProjectMemoryCommand.ExecuteAsync();
@@ -124,6 +320,7 @@ public sealed class MainWindowViewModelTests
             Assert.Equal(1, memoryService.DeleteCount);
             Assert.False(viewModel.IsProjectMemoryChangeApproved);
             Assert.Empty(viewModel.ProjectMemoryEntries);
+            Assert.Null(viewModel.SelectedPromptProjectMemoryEntry);
         }
         finally
         {
@@ -162,6 +359,8 @@ public sealed class MainWindowViewModelTests
             viewModel.IsAgentMode = true;
             viewModel.SelectedProjectMemoryEntry =
                 viewModel.ProjectMemoryEntries[0];
+            viewModel.SelectedPromptProjectMemoryEntry =
+                viewModel.ProjectMemoryEntries[0];
             viewModel.IsProjectMemoryChangeApproved = true;
             memoryService.Entries.Clear();
 
@@ -169,6 +368,7 @@ public sealed class MainWindowViewModelTests
 
             Assert.Empty(viewModel.ProjectMemoryEntries);
             Assert.Null(viewModel.SelectedProjectMemoryEntry);
+            Assert.Null(viewModel.SelectedPromptProjectMemoryEntry);
             Assert.False(viewModel.IsProjectMemoryChangeApproved);
             Assert.Equal(string.Empty, viewModel.ProjectMemoryTitle);
         }
@@ -1888,6 +2088,8 @@ public sealed class MainWindowViewModelTests
 
         public int DeleteCount { get; private set; }
 
+        public int LoadCount { get; private set; }
+
         public int MaximumEntries => 16;
 
         public int MaximumEntryBytes => 1024;
@@ -1900,6 +2102,7 @@ public sealed class MainWindowViewModelTests
             string repositoryRoot,
             CancellationToken cancellationToken = default)
         {
+            LoadCount++;
             string storagePath = Path.Combine(
                 Path.GetTempPath(),
                 "Local-AI",

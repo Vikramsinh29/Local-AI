@@ -137,8 +137,9 @@ Project instructions remain inside the read-only repository boundary:
   explicitly selected skill, and enforces a combined 8 KB and approximately
   2,000-token instruction budget.
 - Agent prompt evidence is ordered as user request, included `AGENTS.md`, the
-  selected included skill, selected source files, and retained verification
-  evidence. Product safety rules remain outside and above that evidence.
+  selected included skill, one explicitly selected project-memory entry,
+  selected source files, and retained verification evidence. Product safety
+  rules remain outside and above that evidence.
 - Core validates a completed agent plan against the exact instruction and
   source paths sent with that request. Desktop withholds the plan when required
   paths are missing or a same-extension unlisted path is cited.
@@ -164,9 +165,19 @@ model boundary:
 - Desktop loads only the selected repository's memory, displays provenance and
   metadata, clears stale state on repository reload, and consumes a distinct
   one-run approval before each create, update, or delete.
-- Sprint 3.2 deliberately keeps all stored memory out of source context and AI
-  prompts. Command entries are inert text; no model, tool, repository, Git,
-  network, import/export, or automatic-memory path is added.
+- Prompt-memory selection is separate from the editor selection, defaults to
+  none, permits at most one entry, and remains session-only. Repository reload,
+  repository change, selected-entry update, or deletion clears the selection.
+- Immediately before composing an agent prompt, Desktop reloads the repository's
+  memory and requires an exact immutable match. Missing, changed, corrupt, or
+  cross-repository evidence is cleared and generation does not start.
+- Core delimits the complete selected entry as untrusted user-managed context
+  after project instructions and before source evidence. It exposes the stable
+  identity `project-memory:<entry-id>` and requires the response to cite that
+  exact identity.
+- Command entries remain inert text and never become a tool request. Sprint 3.3
+  adds no automatic selection, multiple-memory inclusion, model-written memory,
+  tool permission, repository write, Git, network, or unattended path.
 
 ## Change rules
 

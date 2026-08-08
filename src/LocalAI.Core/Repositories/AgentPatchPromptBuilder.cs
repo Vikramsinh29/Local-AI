@@ -12,7 +12,8 @@ public static class AgentPatchPromptBuilder
         IEnumerable<RepositoryContextFile> contextFiles,
         int maximumContextTokens,
         IEnumerable<VerificationRunResult>? verificationRuns = null,
-        ProjectInstructionSelection? instructionSelection = null)
+        ProjectInstructionSelection? instructionSelection = null,
+        ProjectMemoryPromptEvidence? memoryEvidence = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userRequest);
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryName);
@@ -42,7 +43,8 @@ public static class AgentPatchPromptBuilder
             userRequest,
             files,
             maximumContextTokens,
-            instructionSelection);
+            instructionSelection,
+            memoryEvidence);
 
         StringBuilder builder = new();
         builder.AppendLine(
@@ -72,7 +74,8 @@ public static class AgentPatchPromptBuilder
         AppendFormatRequirements(
             builder,
             userRequest,
-            retainedVerificationRuns);
+            retainedVerificationRuns,
+            memoryEvidence);
 
         return builder.ToString();
     }
@@ -80,7 +83,8 @@ public static class AgentPatchPromptBuilder
     private static void AppendFormatRequirements(
         StringBuilder builder,
         string userRequest,
-        IReadOnlyList<VerificationRunResult> verificationRuns)
+        IReadOnlyList<VerificationRunResult> verificationRuns,
+        ProjectMemoryPromptEvidence? memoryEvidence)
     {
         builder.AppendLine("--- PATCH RESPONSE REQUIREMENTS ---");
         builder.AppendLine($"Requested change: {userRequest}");
@@ -90,6 +94,13 @@ public static class AgentPatchPromptBuilder
         builder.AppendLine(ProposedPatchParser.StartMarker);
         builder.AppendLine("SUMMARY:");
         builder.AppendLine("One concise summary grounded in the evidence.");
+
+        if (memoryEvidence is not null)
+        {
+            builder.AppendLine(
+                "The SUMMARY must cite this exact selected-memory evidence " +
+                $"identity: {memoryEvidence.EvidenceIdentity}");
+        }
         builder.AppendLine("<<<FILE:relative/path/to/file>>>");
         builder.AppendLine(ProposedPatchParser.OriginalMarker);
         builder.AppendLine(ProposedPatchParser.ReplacementMarker);

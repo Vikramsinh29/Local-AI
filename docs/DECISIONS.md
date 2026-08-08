@@ -154,3 +154,22 @@ strict entry and combined budgets, sensitive-content rejection, visible
 metadata, honest corruption errors, and explicit approvals keep the new state
 attributable and reversible while avoiding repository changes, command
 execution, cloud synchronization, or unattended behavior.
+
+## D-013 — Prompt memory is explicit, singular, and revalidated
+
+**Decision:** Sprint 3.3 keeps project memory excluded by default and permits
+the user to include at most one stored entry through a separate session-only
+prompt selector. Desktop reloads and exactly matches that entry immediately
+before composition. Core places the complete entry after project instructions
+and before source evidence, labels it untrusted, and exposes the stable evidence
+identity `project-memory:<entry-id>`. A completed response is withheld unless it
+cites that exact identity. Repository changes, reloads, updates, and deletions
+clear the prompt selection.
+
+**Reason:** Explicit selection and visible metadata preserve user attribution
+without creating hidden retrieval. Exact pre-send revalidation prevents stale
+or cross-project memory from entering a prompt, while deterministic identity
+checking prevents the model from silently substituting another note. Keeping
+Command memory inert and subordinate to product safety, the user request,
+project instructions, and approval gates avoids adding a command or permission
+channel.

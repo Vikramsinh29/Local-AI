@@ -93,6 +93,86 @@ public sealed class MainWindowXamlTests
                 .Attribute("VerticalScrollBarVisibility")?.Value);
     }
 
+    [Fact]
+    public void ProjectMemory_PromptAndEditorSelectionsAreSeparate()
+    {
+        string xamlPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Fixtures",
+            "MainWindow.xaml");
+        XDocument document = XDocument.Load(xamlPath);
+
+        XElement promptSelector = FindNamedElement(
+            document,
+            "PromptMemorySelector");
+        XElement editorList = FindNamedElement(
+            document,
+            "ProjectMemoryEditorList");
+
+        Assert.Contains(
+            "SelectedPromptProjectMemoryEntry",
+            promptSelector.Attribute("SelectedItem")?.Value ?? string.Empty);
+        Assert.Contains(
+            "SelectedProjectMemoryEntry",
+            editorList.Attribute("SelectedItem")?.Value ?? string.Empty);
+        Assert.DoesNotContain(
+            "SelectedPromptProjectMemoryEntry",
+            editorList.Attribute("SelectedItem")?.Value ?? string.Empty);
+    }
+
+    [Fact]
+    public void RepositoryPanelHeader_ConstrainsLongNameAndPathBeforeCloseButton()
+    {
+        string xamlPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Fixtures",
+            "MainWindow.xaml");
+        XDocument document = XDocument.Load(xamlPath);
+
+        XElement headerText = FindNamedElement(
+            document,
+            "RepositoryPanelHeaderText");
+        XElement closeButton = FindNamedElement(
+            document,
+            "RepositoryPanelCloseButton");
+        XElement[] textBlocks = headerText
+            .Elements()
+            .Where(element => element.Name.LocalName == "TextBlock")
+            .ToArray();
+        XElement[] columnDefinitions = closeButton
+            .Parent!
+            .Elements()
+            .Single(element =>
+                element.Name.LocalName == "Grid.ColumnDefinitions")
+            .Elements()
+            .ToArray();
+
+        Assert.Equal(2, textBlocks.Length);
+        Assert.All(
+            textBlocks,
+            textBlock =>
+            {
+                Assert.Equal(
+                    "CharacterEllipsis",
+                    textBlock.Attribute("TextTrimming")?.Value);
+                Assert.Equal(
+                    "NoWrap",
+                    textBlock.Attribute("TextWrapping")?.Value);
+            });
+        Assert.Contains(
+            "RepositoryName",
+            textBlocks[0].Attribute("ToolTip")?.Value ?? string.Empty);
+        Assert.Contains(
+            "RepositoryPath",
+            textBlocks[1].Attribute("ToolTip")?.Value ?? string.Empty);
+        Assert.Equal(3, columnDefinitions.Length);
+        Assert.Equal("12", columnDefinitions[1].Attribute("Width")?.Value);
+        Assert.Equal("32", columnDefinitions[2].Attribute("Width")?.Value);
+        Assert.Equal("2", closeButton.Attribute("Grid.Column")?.Value);
+        Assert.Equal("32", closeButton.Attribute("Width")?.Value);
+        Assert.Equal("Right", closeButton.Attribute("HorizontalAlignment")?.Value);
+    }
+
     private static XElement FindNamedElement(
         XDocument document,
         string name)

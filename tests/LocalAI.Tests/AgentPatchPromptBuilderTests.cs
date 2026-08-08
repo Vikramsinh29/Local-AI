@@ -60,4 +60,29 @@ public sealed class AgentPatchPromptBuilderTests
             exception.Message,
             StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Build_RequiresSelectedMemoryIdentityInPatchSummary()
+    {
+        ProjectMemoryPromptEvidence memory = new(
+            Guid.Parse("12345678-1234-1234-1234-123456789abc"),
+            ProjectMemoryCategory.KnownIssue,
+            "Greeting limitation",
+            "Keep the greeting on one line.",
+            54,
+            14,
+            DateTimeOffset.Parse("2026-08-08T12:00:00+00:00"));
+
+        string prompt = AgentPatchPromptBuilder.Build(
+            "Change the greeting.",
+            "Sample",
+            "Git repository",
+            [new RepositoryContextFile("Program.cs", "source", 6)],
+            maximumContextTokens: 1_000,
+            memoryEvidence: memory);
+
+        Assert.Contains(memory.EvidenceIdentity, prompt);
+        Assert.Contains("SUMMARY must cite", prompt);
+        Assert.Contains("Keep the greeting on one line.", prompt);
+    }
 }

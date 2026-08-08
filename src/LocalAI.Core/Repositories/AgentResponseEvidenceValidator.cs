@@ -9,7 +9,8 @@ public static partial class AgentResponseEvidenceValidator
     public static AgentResponseEvidenceValidationResult Validate(
         string modelResponse,
         IEnumerable<RepositoryContextFile> sourceFiles,
-        ProjectInstructionSelection? instructionSelection = null)
+        ProjectInstructionSelection? instructionSelection = null,
+        ProjectMemoryPromptEvidence? memoryEvidence = null)
     {
         ArgumentNullException.ThrowIfNull(modelResponse);
         ArgumentNullException.ThrowIfNull(sourceFiles);
@@ -22,7 +23,15 @@ public static partial class AgentResponseEvidenceValidator
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        string[] missingRequiredPaths = expectedPaths
+        IEnumerable<string> requiredEvidence = expectedPaths;
+
+        if (memoryEvidence is not null)
+        {
+            requiredEvidence = requiredEvidence.Append(
+                memoryEvidence.EvidenceIdentity);
+        }
+
+        string[] missingRequiredPaths = requiredEvidence
             .Where(path => !modelResponse.Contains(
                 path,
                 StringComparison.Ordinal))
@@ -34,6 +43,7 @@ public static partial class AgentResponseEvidenceValidator
         HashSet<string> expectedExtensions = expectedPaths
             .Select(Path.GetExtension)
             .Where(extension => !string.IsNullOrWhiteSpace(extension))
+            .Select(extension => extension!)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         string[] unexpectedPaths = EvidencePathPattern()

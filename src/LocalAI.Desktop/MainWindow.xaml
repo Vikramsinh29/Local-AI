@@ -326,7 +326,7 @@
                                            Margin="0,4,0,0"
                                            FontSize="9"
                                            Foreground="#53657D"
-                                           Text="Precedence: User request → AGENTS.md → selected skill → source evidence"/>
+                                           Text="Precedence: User request → AGENTS.md → selected skill → selected memory → source evidence"/>
 
                                 <TextBlock Grid.Row="2"
                                            Margin="0,3,0,7"
@@ -450,7 +450,7 @@
                                     <TextBlock FontSize="9"
                                                Foreground="#6D5878"
                                                TextWrapping="Wrap"
-                                               Text="Sprint 3.2 memory is never added to AI prompts. Every create, update, or delete requires a separate consumed approval."/>
+                                               Text="No memory is sent by default. Explicitly select at most one complete entry for agent prompts. The selection is session-only and revalidated before every send; editing remains a separate choice."/>
 
                                     <TextBlock Margin="0,4,0,7"
                                                FontFamily="Consolas"
@@ -460,10 +460,39 @@
                                                ToolTip="{Binding ProjectMemoryStoragePath}"
                                                Text="{Binding ProjectMemoryStoragePath}"/>
 
-                                    <ListBox Height="104"
+                                    <Grid Margin="0,0,0,5">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <ComboBox x:Name="PromptMemorySelector"
+                                                  Height="28"
+                                                  DisplayMemberPath="PromptSelectionText"
+                                                  ItemsSource="{Binding ProjectMemoryEntries}"
+                                                  SelectedItem="{Binding SelectedPromptProjectMemoryEntry}"
+                                                  IsEnabled="{Binding IsNotBusy}"
+                                                  ToolTip="Explicitly select at most one stored memory for agent prompts"/>
+
+                                        <Button Grid.Column="1"
+                                                MinWidth="90"
+                                                Height="28"
+                                                Margin="8,0,0,0"
+                                                Command="{Binding ClearPromptProjectMemorySelectionCommand}"
+                                                Content="Clear memory"/>
+                                    </Grid>
+
+                                    <TextBlock Margin="0,0,0,7"
+                                               FontSize="9"
+                                               Foreground="#6D5878"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding ProjectMemoryPromptSelectionSummary}"/>
+
+                                    <ListBox x:Name="ProjectMemoryEditorList"
+                                             Height="104"
                                              ItemsSource="{Binding ProjectMemoryEntries}"
                                              SelectedItem="{Binding SelectedProjectMemoryEntry}"
-                                             ToolTip="Select an entry to review or edit it">
+                                             ToolTip="Select an entry to review or edit it; this does not include it in AI prompts">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
                                                 <Grid Margin="3,2">
@@ -904,27 +933,47 @@
                 </Grid.RowDefinitions>
 
                 <Grid Grid.Row="0"
-                      Margin="16,14">
+                      Margin="16,14,12,10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="32"/>
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel>
-                        <TextBlock FontSize="16"
+                    <Grid x:Name="RepositoryPanelHeaderText"
+                          Grid.Column="0"
+                          MinWidth="0"
+                          VerticalAlignment="Center"
+                          ClipToBounds="True">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0"
+                                   FontSize="16"
                                    FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap"
+                                   ToolTip="{Binding RepositoryName}"
                                    Text="{Binding RepositoryName}"/>
 
-                        <TextBlock Margin="0,3,0,0"
+                        <TextBlock Grid.Row="1"
+                                   Margin="0,3,0,0"
                                    FontSize="10"
                                    Foreground="#777777"
                                    TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap"
+                                   ToolTip="{Binding RepositoryPath}"
                                    Text="{Binding RepositoryPath}"/>
-                    </StackPanel>
+                    </Grid>
 
-                    <Button Grid.Column="1"
+                    <Button x:Name="RepositoryPanelCloseButton"
+                            Grid.Column="2"
                             Width="32"
                             Height="32"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
                             Command="{Binding ToggleRepositoryPanelCommand}"
                             Content="✕"/>
                 </Grid>

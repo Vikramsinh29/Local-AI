@@ -453,7 +453,7 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** Sprint 3.3 — approved roadmap; implementation not started.
+**Status:** Sprint 3.3 — implementation in progress.
 
 Implement only explicit, session-only inclusion of at most one user-selected
 project-memory entry. Default to no memory, show the exact included entry and

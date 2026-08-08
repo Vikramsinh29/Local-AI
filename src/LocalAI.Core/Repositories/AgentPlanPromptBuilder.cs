@@ -12,7 +12,8 @@ public static class AgentPlanPromptBuilder
         IEnumerable<RepositoryContextFile> contextFiles,
         int maximumContextTokens,
         IEnumerable<VerificationRunResult>? verificationRuns = null,
-        ProjectInstructionSelection? instructionSelection = null)
+        ProjectInstructionSelection? instructionSelection = null,
+        ProjectMemoryPromptEvidence? memoryEvidence = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userRequest);
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryName);
@@ -30,7 +31,8 @@ public static class AgentPlanPromptBuilder
             userRequest,
             files,
             maximumContextTokens,
-            instructionSelection);
+            instructionSelection,
+            memoryEvidence);
 
         StringBuilder builder = new();
         builder.AppendLine(
@@ -72,7 +74,8 @@ public static class AgentPlanPromptBuilder
             userRequest,
             retainedVerificationRuns,
             files,
-            instructionSelection);
+            instructionSelection,
+            memoryEvidence);
 
         return builder.ToString();
     }
@@ -82,7 +85,8 @@ public static class AgentPlanPromptBuilder
         string userRequest,
         IReadOnlyList<VerificationRunResult> verificationRuns,
         IReadOnlyList<RepositoryContextFile> sourceFiles,
-        ProjectInstructionSelection? instructionSelection)
+        ProjectInstructionSelection? instructionSelection,
+        ProjectMemoryPromptEvidence? memoryEvidence)
     {
         builder.AppendLine("--- FINAL RESPONSE REQUIREMENTS ---");
         builder.AppendLine($"Answer this user request: {userRequest}");
@@ -104,6 +108,13 @@ public static class AgentPlanPromptBuilder
             builder.AppendLine(
                 $"Required source evidence path: " +
                 $"{sourceFile.RelativePath}");
+        }
+
+        if (memoryEvidence is not null)
+        {
+            builder.AppendLine(
+                "Required project-memory evidence identity: " +
+                memoryEvidence.EvidenceIdentity);
         }
 
         if (verificationRuns.Count == 0)

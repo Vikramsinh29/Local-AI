@@ -28,6 +28,9 @@ public sealed class ProjectMemoryEntryViewModel
     public string SizeText =>
         $"{Entry.SizeBytes:N0} B • ~{Entry.EstimatedTokens:N0} tokens";
 
+    public string PromptSelectionText =>
+        $"{CategoryText} • {Title} • {SizeText}";
+
     public string UpdatedText =>
         $"Updated {Entry.UpdatedAtUtc.ToLocalTime():yyyy-MM-dd HH:mm}";
 }
