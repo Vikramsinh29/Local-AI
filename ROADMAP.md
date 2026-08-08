@@ -382,7 +382,8 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** Sprint 3.2 — approved; implementation not started.
+**Status:** Sprint 3.2 — candidate implementation ready for Windows build,
+automated tests, and manual verification.
 
 Implement only the user-approved local project memory store described above.
 Allow bounded user-typed Architecture, Command, Decision, and Known issue notes

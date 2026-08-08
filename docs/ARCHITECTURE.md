@@ -24,7 +24,7 @@ ViewModels depend on Core interfaces, never concrete Infrastructure services.
 | Area | Location | Responsibility |
 |---|---|---|
 | Contracts and models | `src/LocalAI.Core` | Interfaces, immutable models, shared rules |
-| External services | `src/LocalAI.Infrastructure` | Ollama HTTP, read-only repository/context and instruction-manifest access, fixed verification execution, and the approval-gated patch write boundary |
+| External services | `src/LocalAI.Infrastructure` | Ollama HTTP, read-only repository/context and instruction-manifest access, bounded LocalAppData project-memory persistence, fixed verification execution, and the approval-gated patch write boundary |
 | UI coordination | `src/LocalAI.Desktop/ViewModels` | Observable state, one-run approval, commands, cancellation, status, and session audit |
 | UI presentation | `src/LocalAI.Desktop` | XAML bindings and view-specific code-behind only |
 | Tests | `tests/LocalAI.Tests` | Deterministic unit and service behavior tests |
@@ -147,6 +147,26 @@ Project instructions remain inside the read-only repository boundary:
   reloaded or changed.
 - Sprint 3.1 adds no automatic skill selection, persistent memory, instruction
   editing, repository writes, tools, network access, commit, or push path.
+
+Project memory crosses a separate local-state boundary, not the repository or
+model boundary:
+
+- Core defines immutable memory entries, the four supported categories, load
+  and mutation results, and the asynchronous persistence contract.
+- Infrastructure derives a deterministic SHA-256 repository identity from the
+  validated canonical root and stores versioned UTF-8 JSON below
+  `%LOCALAPPDATA%\Local-AI\ProjectMemory`, never inside the repository.
+- The service validates the complete store before any mutation, rejects linked
+  roots, sensitive or binary/control content, unsupported schema, duplicate
+  IDs, and over-budget data, and performs same-directory atomic replacement.
+- The limits are 16 entries, 1 KiB per complete title/content entry, 8 KiB and
+  approximately 2,000 estimated tokens combined. Entries are never truncated.
+- Desktop loads only the selected repository's memory, displays provenance and
+  metadata, clears stale state on repository reload, and consumes a distinct
+  one-run approval before each create, update, or delete.
+- Sprint 3.2 deliberately keeps all stored memory out of source context and AI
+  prompts. Command entries are inert text; no model, tool, repository, Git,
+  network, import/export, or automatic-memory path is added.
 
 ## Change rules
 

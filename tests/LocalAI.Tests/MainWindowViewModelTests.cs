@@ -1,3 +1,4 @@
+using System.Text;
 using LocalAI.Core.Interfaces;
 using LocalAI.Core.Models;
 using LocalAI.Desktop.ViewModels;
@@ -6,6 +7,214 @@ namespace LocalAI.Tests;
 
 public sealed class MainWindowViewModelTests
 {
+    [Fact]
+    public async Task ProjectMemory_LoadsMetadataButNeverEntersAgentPrompt()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        ProjectMemoryEntry memory = CreateMemoryEntry(
+            ProjectMemoryCategory.Decision,
+            "Local decision",
+            "MEMORY_SENTINEL_MUST_NOT_REACH_MODEL");
+        FakeProjectMemoryService memoryService = new([memory]);
+        FakeOllamaClient ollama = new(
+            (_, _) => StreamText("### Evidence Used\n- Sample.cs"));
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+            using MainWindowViewModel viewModel = CreateViewModel(
+                ollama,
+                folderPickerService:
+                    new FakeFolderPickerService(repositoryRoot),
+                repositoryInspector:
+                    new FakeRepositoryInspector(repository),
+                projectMemoryService: memoryService);
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+
+            ProjectMemoryEntryViewModel displayed = Assert.Single(
+                viewModel.ProjectMemoryEntries);
+            Assert.Equal("Decision", displayed.CategoryText);
+            Assert.Contains("tokens", displayed.SizeText);
+            Assert.Contains(
+                "not sent to AI",
+                viewModel.ProjectMemorySummary,
+                StringComparison.OrdinalIgnoreCase);
+
+            viewModel.ContextFiles.Add(
+                new RepositoryContextFileViewModel(
+                    new RepositoryContextFile(
+                        "Sample.cs",
+                        "source evidence",
+                        15)));
+            viewModel.IsAgentMode = true;
+            viewModel.MessageInput = "Plan safely.";
+            await viewModel.SendCommand.ExecuteAsync();
+
+            Assert.DoesNotContain(
+                "MEMORY_SENTINEL_MUST_NOT_REACH_MODEL",
+                ollama.LastPrompt);
+
+            viewModel.IsPatchPreviewRequested = true;
+            viewModel.MessageInput = "Preview the same safe change.";
+            await viewModel.SendCommand.ExecuteAsync();
+
+            Assert.DoesNotContain(
+                "MEMORY_SENTINEL_MUST_NOT_REACH_MODEL",
+                ollama.LastPrompt);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ProjectMemory_CreateUpdateDelete_ConsumesSeparateApprovals()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        FakeProjectMemoryService memoryService = new();
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+            using MainWindowViewModel viewModel = CreateViewModel(
+                new FakeOllamaClient((_, _) => StreamText("unused")),
+                folderPickerService:
+                    new FakeFolderPickerService(repositoryRoot),
+                repositoryInspector:
+                    new FakeRepositoryInspector(repository),
+                projectMemoryService: memoryService);
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+            viewModel.IsAgentMode = true;
+            viewModel.SelectedProjectMemoryCategory =
+                ProjectMemoryCategory.Architecture;
+            viewModel.ProjectMemoryTitle = "Layers";
+            viewModel.ProjectMemoryContent =
+                "Desktop depends on Core interfaces.";
+
+            Assert.False(viewModel.SaveProjectMemoryCommand.CanExecute(null));
+
+            viewModel.IsProjectMemoryChangeApproved = true;
+            await viewModel.SaveProjectMemoryCommand.ExecuteAsync();
+
+            Assert.Equal(1, memoryService.CreateCount);
+            Assert.False(viewModel.IsProjectMemoryChangeApproved);
+            Assert.Single(viewModel.ProjectMemoryEntries);
+
+            viewModel.ProjectMemoryTitle = "Layering";
+            Assert.False(viewModel.IsProjectMemoryChangeApproved);
+            viewModel.IsProjectMemoryChangeApproved = true;
+            await viewModel.SaveProjectMemoryCommand.ExecuteAsync();
+
+            Assert.Equal(1, memoryService.UpdateCount);
+            Assert.False(viewModel.IsProjectMemoryChangeApproved);
+
+            Assert.False(viewModel.DeleteProjectMemoryCommand.CanExecute(null));
+            viewModel.IsProjectMemoryChangeApproved = true;
+            await viewModel.DeleteProjectMemoryCommand.ExecuteAsync();
+
+            Assert.Equal(1, memoryService.DeleteCount);
+            Assert.False(viewModel.IsProjectMemoryChangeApproved);
+            Assert.Empty(viewModel.ProjectMemoryEntries);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ProjectMemory_RefreshClearsStaleStateBeforeReload()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        FakeProjectMemoryService memoryService = new(
+            [
+                CreateMemoryEntry(
+                    ProjectMemoryCategory.KnownIssue,
+                    "Old",
+                    "Old repository state.")
+            ]);
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+            using MainWindowViewModel viewModel = CreateViewModel(
+                new FakeOllamaClient((_, _) => StreamText("unused")),
+                folderPickerService:
+                    new FakeFolderPickerService(repositoryRoot),
+                repositoryInspector:
+                    new FakeRepositoryInspector(repository),
+                projectMemoryService: memoryService);
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+            Assert.Single(viewModel.ProjectMemoryEntries);
+            viewModel.IsAgentMode = true;
+            viewModel.SelectedProjectMemoryEntry =
+                viewModel.ProjectMemoryEntries[0];
+            viewModel.IsProjectMemoryChangeApproved = true;
+            memoryService.Entries.Clear();
+
+            await viewModel.RefreshRepositoryCommand.ExecuteAsync();
+
+            Assert.Empty(viewModel.ProjectMemoryEntries);
+            Assert.Null(viewModel.SelectedProjectMemoryEntry);
+            Assert.False(viewModel.IsProjectMemoryChangeApproved);
+            Assert.Equal(string.Empty, viewModel.ProjectMemoryTitle);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ProjectMemory_CorruptLoadIsDisplayedHonestly()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        FakeProjectMemoryService memoryService = new()
+        {
+            LoadError = "memory.json is malformed"
+        };
+
+        try
+        {
+            RepositoryInfo repository = CreateRepositoryInfo(
+                repositoryRoot,
+                isGitRepository: true,
+                solutionFiles: ["Sample.slnx"]);
+            using MainWindowViewModel viewModel = CreateViewModel(
+                new FakeOllamaClient((_, _) => StreamText("unused")),
+                folderPickerService:
+                    new FakeFolderPickerService(repositoryRoot),
+                repositoryInspector:
+                    new FakeRepositoryInspector(repository),
+                projectMemoryService: memoryService);
+
+            await viewModel.BrowseRepositoryCommand.ExecuteAsync();
+
+            Assert.Empty(viewModel.ProjectMemoryEntries);
+            Assert.Contains(
+                "malformed",
+                viewModel.ProjectMemoryStatusText,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
     [Fact]
     public async Task AgentPlan_RejectsUngroundedEvidenceCitations()
     {
@@ -1345,7 +1554,8 @@ public sealed class MainWindowViewModelTests
         IFolderPickerService? folderPickerService = null,
         IRepositoryInspector? repositoryInspector = null,
         IRepositoryPatchService? repositoryPatchService = null,
-        IProjectInstructionService? projectInstructionService = null)
+        IProjectInstructionService? projectInstructionService = null,
+        IProjectMemoryService? projectMemoryService = null)
     {
         MainWindowViewModel viewModel = new(
             ollamaClient,
@@ -1357,7 +1567,9 @@ public sealed class MainWindowViewModelTests
             verificationToolRunner ??
                 new FakeVerificationToolRunner(),
             projectInstructionService ??
-                new FakeProjectInstructionService())
+                new FakeProjectInstructionService(),
+            projectMemoryService ??
+                new FakeProjectMemoryService())
         {
             SelectedModel = "qwen2.5-coder:3b"
         };
@@ -1475,6 +1687,23 @@ public sealed class MainWindowViewModelTests
             Math.Max(1, (content.Length + 3) / 4),
             content,
             ExclusionReason: null);
+    }
+
+    private static ProjectMemoryEntry CreateMemoryEntry(
+        ProjectMemoryCategory category,
+        string title,
+        string content)
+    {
+        long bytes = Encoding.UTF8.GetByteCount(title) +
+                     Encoding.UTF8.GetByteCount(content) + 1;
+        return new ProjectMemoryEntry(
+            Guid.NewGuid(),
+            category,
+            title,
+            content,
+            bytes,
+            Math.Max(1, (int)((bytes + 3) / 4)),
+            DateTimeOffset.UtcNow);
     }
 
     private static void CreatePatchSourceFile(string repositoryRoot)
@@ -1642,5 +1871,106 @@ public sealed class MainWindowViewModelTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult(
                 manifest ?? ProjectInstructionManifest.Empty);
+    }
+
+    private sealed class FakeProjectMemoryService(
+        IEnumerable<ProjectMemoryEntry>? entries = null) :
+        IProjectMemoryService
+    {
+        public List<ProjectMemoryEntry> Entries { get; } =
+            entries?.ToList() ?? [];
+
+        public string? LoadError { get; set; }
+
+        public int CreateCount { get; private set; }
+
+        public int UpdateCount { get; private set; }
+
+        public int DeleteCount { get; private set; }
+
+        public int MaximumEntries => 16;
+
+        public int MaximumEntryBytes => 1024;
+
+        public int MaximumCombinedBytes => 8 * 1024;
+
+        public int MaximumCombinedTokens => 2000;
+
+        public Task<ProjectMemoryLoadResult> LoadAsync(
+            string repositoryRoot,
+            CancellationToken cancellationToken = default)
+        {
+            string storagePath = Path.Combine(
+                Path.GetTempPath(),
+                "Local-AI",
+                "ProjectMemory",
+                "fake",
+                "memory.json");
+            return Task.FromResult(LoadError is null
+                ? ProjectMemoryLoadResult.Success(
+                    Entries.ToArray(),
+                    storagePath)
+                : ProjectMemoryLoadResult.Failure(
+                    storagePath,
+                    LoadError));
+        }
+
+        public Task<ProjectMemoryMutationResult> CreateAsync(
+            string repositoryRoot,
+            ProjectMemoryCategory category,
+            string title,
+            string content,
+            CancellationToken cancellationToken = default)
+        {
+            CreateCount++;
+            ProjectMemoryEntry entry = CreateMemoryEntry(
+                category,
+                title,
+                content);
+            Entries.Add(entry);
+            return Task.FromResult(
+                ProjectMemoryMutationResult.Success(
+                    Entries.ToArray(),
+                    entry));
+        }
+
+        public Task<ProjectMemoryMutationResult> UpdateAsync(
+            string repositoryRoot,
+            Guid entryId,
+            ProjectMemoryCategory category,
+            string title,
+            string content,
+            CancellationToken cancellationToken = default)
+        {
+            UpdateCount++;
+            int index = Entries.FindIndex(entry => entry.Id == entryId);
+            ProjectMemoryEntry entry = CreateMemoryEntry(
+                category,
+                title,
+                content) with
+            {
+                Id = entryId
+            };
+            Entries[index] = entry;
+            return Task.FromResult(
+                ProjectMemoryMutationResult.Success(
+                    Entries.ToArray(),
+                    entry));
+        }
+
+        public Task<ProjectMemoryMutationResult> DeleteAsync(
+            string repositoryRoot,
+            Guid entryId,
+            CancellationToken cancellationToken = default)
+        {
+            DeleteCount++;
+            ProjectMemoryEntry entry = Entries.Single(
+                item => item.Id == entryId);
+            Entries.Remove(entry);
+            return Task.FromResult(
+                ProjectMemoryMutationResult.Success(
+                    Entries.ToArray(),
+                    entry));
+        }
     }
 }

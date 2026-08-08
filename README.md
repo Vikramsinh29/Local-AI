@@ -29,9 +29,14 @@ an external AI service.
   explicitly selected `skills/<name>/SKILL.md`, with provenance, exclusion
   reasons, a strict 8 KB / approximately 2,000-token sub-budget, and a
   fail-closed response gate for missing or unlisted evidence paths.
+- User-managed project memory for Architecture, Command, Decision, and Known
+  issue notes. Memory is stored outside the repository in LocalAppData, is
+  bounded to 16 entries / 1 KiB each / 8 KiB and approximately 2,000 tokens
+  combined, and requires a fresh one-run approval for every change.
 
 The current roadmap is in [ROADMAP.md](ROADMAP.md). The active scope is Phase
-3, Sprint 3.1: a read-only, evidence-bounded project instruction manifest.
+3, Sprint 3.2: user-approved local project memory that remains excluded from
+AI prompts.
 Local-AI does not provide an arbitrary terminal and must not restore packages,
 commit, push, or apply model output that was not separately reviewed and
 approved.

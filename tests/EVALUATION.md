@@ -106,6 +106,21 @@ agent upgrades. Run the same cases before and after a proposed improvement.
 41. Reject a generated agent plan that abbreviates or omits a required exact
     instruction/source path, or cites an unlisted path such as `README.md`;
     accept the same plan only when every displayed evidence path is exact.
+42. Create, restart/load, update, and delete each supported project-memory
+    category only after a fresh one-run approval; prove each approval is
+    consumed and the selected repository remains Git-clean.
+43. Display each memory entry's category, title, UTF-8 bytes, estimated tokens,
+    and updated time; isolate repositories by canonical path and clear stale
+    memory state before loading a refreshed or different repository.
+44. Reject malformed JSON, unsupported schema, duplicate IDs, invalid UTF-8,
+    sensitive or binary/control content, more than 16 entries, more than 1 KiB
+    per entry, and more than 8 KiB or approximately 2,000 tokens combined.
+45. Cancel a memory mutation without a partial write; confirm atomic writes
+    leave one valid `memory.json` and never silently repair, truncate, or
+    discard invalid existing data.
+46. Put a unique sentinel in stored memory and confirm it never appears in an
+    ordinary Agent plan prompt, structured patch prompt, or source context in
+    Sprint 3.2. Confirm Command entries are displayed only and never executed.
 
 ## Recording results
 

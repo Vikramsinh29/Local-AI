@@ -138,3 +138,19 @@ instruction-driven expansion of Local-AI permissions. Generated agent plans
 are also withheld when they omit an exact included instruction or source path,
 or cite a same-extension repository path outside the displayed evidence set;
 the local model is not trusted to self-certify its grounding.
+
+## D-012 — Project memory is user-written, local, bounded, and prompt-excluded
+
+**Decision:** Sprint 3.2 stores only user-typed Architecture, Command,
+Decision, and Known issue notes in a versioned UTF-8 JSON file below
+LocalAppData. The canonical repository path determines an isolated project ID.
+Every create, update, or delete consumes a separate one-run approval; the
+service validates the full existing store and performs an atomic replacement.
+Memory is not added to prompts or source context in this sprint.
+
+**Reason:** Small persistent notes can preserve useful project facts without
+granting the model a hidden or self-writing memory channel. External storage,
+strict entry and combined budgets, sensitive-content rejection, visible
+metadata, honest corruption errors, and explicit approvals keep the new state
+attributable and reversible while avoiding repository changes, command
+execution, cloud synchronization, or unattended behavior.

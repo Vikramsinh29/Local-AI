@@ -27,6 +27,7 @@ public sealed class MainWindowViewModel :
     private readonly IRepositoryPatchService _repositoryPatchService;
     private readonly IVerificationToolRunner _verificationToolRunner;
     private readonly IProjectInstructionService _projectInstructionService;
+    private readonly IProjectMemoryService _projectMemoryService;
     private readonly Stopwatch _stopwatch = new();
     private readonly DispatcherTimer _elapsedTimer;
     private readonly List<VerificationRunResult> _verificationRuns = [];
@@ -55,6 +56,16 @@ public sealed class MainWindowViewModel :
         ProjectInstructionSelectionBuilder.Build(
             ProjectInstructionManifest.Empty);
     private ProjectInstructionItemViewModel? _selectedInstructionSkill;
+    private ProjectMemoryEntryViewModel? _selectedProjectMemoryEntry;
+    private ProjectMemoryCategory _selectedProjectMemoryCategory =
+        ProjectMemoryCategory.Architecture;
+    private string _projectMemoryTitle = string.Empty;
+    private string _projectMemoryContent = string.Empty;
+    private string _projectMemorySummary =
+        "Select a repository to load local project memory.";
+    private string _projectMemoryStatusText =
+        "Memory is local, user-managed, and not sent to the AI.";
+    private string _projectMemoryStoragePath = string.Empty;
     private string _instructionManifestSummary =
         "Select a repository to discover project instructions.";
     private string _instructionDiscoveryIssuesText = string.Empty;
@@ -68,6 +79,7 @@ public sealed class MainWindowViewModel :
     private bool _isPatchApplyApproved;
     private bool _isPatchRollbackApproved;
     private bool _isPatchPreviewRequested;
+    private bool _isProjectMemoryChangeApproved;
     private bool _isRepositoryPanelOpen;
     private bool _isAgentMode;
     private bool _isBusy;
@@ -80,7 +92,8 @@ public sealed class MainWindowViewModel :
         IRepositoryFileContextService repositoryFileContextService,
         IRepositoryPatchService repositoryPatchService,
         IVerificationToolRunner verificationToolRunner,
-        IProjectInstructionService projectInstructionService)
+        IProjectInstructionService projectInstructionService,
+        IProjectMemoryService projectMemoryService)
     {
         _ollamaClient = ollamaClient ??
             throw new ArgumentNullException(nameof(ollamaClient));
@@ -109,6 +122,10 @@ public sealed class MainWindowViewModel :
         _projectInstructionService = projectInstructionService ??
             throw new ArgumentNullException(
                 nameof(projectInstructionService));
+
+        _projectMemoryService = projectMemoryService ??
+            throw new ArgumentNullException(
+                nameof(projectMemoryService));
 
         RefreshModelsCommand = new AsyncRelayCommand(
             RefreshModelsAsync,
@@ -157,6 +174,18 @@ public sealed class MainWindowViewModel :
             ClearSelectedInstructionSkill,
             () => SelectedInstructionSkill is not null && !IsBusy);
 
+        SaveProjectMemoryCommand = new AsyncRelayCommand(
+            SaveProjectMemoryAsync,
+            CanSaveProjectMemory);
+
+        DeleteProjectMemoryCommand = new AsyncRelayCommand(
+            DeleteProjectMemoryAsync,
+            CanDeleteProjectMemory);
+
+        ClearProjectMemoryEditorCommand = new RelayCommand(
+            ClearProjectMemoryEditor,
+            () => !IsBusy);
+
         CancelCommand = new RelayCommand(
             Cancel,
             () => IsBusy);
@@ -201,6 +230,13 @@ public sealed class MainWindowViewModel :
     public ObservableCollection<ProjectInstructionItemViewModel>
         AvailableInstructionSkills { get; } = [];
 
+    public ObservableCollection<ProjectMemoryEntryViewModel>
+        ProjectMemoryEntries { get; } = [];
+
+    public IReadOnlyList<ProjectMemoryCategory>
+        AvailableProjectMemoryCategories { get; } =
+            Enum.GetValues<ProjectMemoryCategory>();
+
     public IReadOnlyList<VerificationToolDescriptor>
         AvailableVerificationTools { get; } = VerificationTools.All;
 
@@ -227,6 +263,12 @@ public sealed class MainWindowViewModel :
     public AsyncRelayCommand RollbackAppliedPatchCommand { get; }
 
     public RelayCommand ClearSelectedInstructionSkillCommand { get; }
+
+    public AsyncRelayCommand SaveProjectMemoryCommand { get; }
+
+    public AsyncRelayCommand DeleteProjectMemoryCommand { get; }
+
+    public RelayCommand ClearProjectMemoryEditorCommand { get; }
 
     public RelayCommand CancelCommand { get; }
 
@@ -302,6 +344,8 @@ public sealed class MainWindowViewModel :
                 RunVerificationCommand.NotifyCanExecuteChanged();
                 ApplyProposedPatchCommand.NotifyCanExecuteChanged();
                 RollbackAppliedPatchCommand.NotifyCanExecuteChanged();
+                SaveProjectMemoryCommand.NotifyCanExecuteChanged();
+                DeleteProjectMemoryCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(AgentEvidenceText));
             }
         }
@@ -366,6 +410,7 @@ public sealed class MainWindowViewModel :
             RollbackAppliedPatchCommand.NotifyCanExecuteChanged();
             IsVerificationApproved = false;
             IsPatchRollbackApproved = false;
+            IsProjectMemoryChangeApproved = false;
 
             if (!value)
             {
@@ -623,6 +668,114 @@ public sealed class MainWindowViewModel :
             value);
     }
 
+    public ProjectMemoryEntryViewModel? SelectedProjectMemoryEntry
+    {
+        get => _selectedProjectMemoryEntry;
+        set
+        {
+            if (!SetField(ref _selectedProjectMemoryEntry, value))
+            {
+                return;
+            }
+
+            IsProjectMemoryChangeApproved = false;
+
+            if (value is not null)
+            {
+                SetProjectMemoryEditor(
+                    value.Category,
+                    value.Title,
+                    value.Content);
+            }
+
+            OnPropertyChanged(nameof(ProjectMemorySaveActionText));
+            SaveProjectMemoryCommand.NotifyCanExecuteChanged();
+            DeleteProjectMemoryCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public ProjectMemoryCategory SelectedProjectMemoryCategory
+    {
+        get => _selectedProjectMemoryCategory;
+        set
+        {
+            if (SetField(ref _selectedProjectMemoryCategory, value))
+            {
+                ResetProjectMemoryApproval();
+            }
+        }
+    }
+
+    public string ProjectMemoryTitle
+    {
+        get => _projectMemoryTitle;
+        set
+        {
+            if (SetField(ref _projectMemoryTitle, value))
+            {
+                ResetProjectMemoryApproval();
+            }
+        }
+    }
+
+    public string ProjectMemoryContent
+    {
+        get => _projectMemoryContent;
+        set
+        {
+            if (SetField(ref _projectMemoryContent, value))
+            {
+                ResetProjectMemoryApproval();
+            }
+        }
+    }
+
+    public string ProjectMemorySummary
+    {
+        get => _projectMemorySummary;
+        private set => SetField(ref _projectMemorySummary, value);
+    }
+
+    public string ProjectMemoryStatusText
+    {
+        get => _projectMemoryStatusText;
+        private set => SetField(ref _projectMemoryStatusText, value);
+    }
+
+    public string ProjectMemoryStoragePath
+    {
+        get => _projectMemoryStoragePath;
+        private set => SetField(ref _projectMemoryStoragePath, value);
+    }
+
+    public string ProjectMemorySaveActionText =>
+        SelectedProjectMemoryEntry is null
+            ? "Create memory"
+            : "Update memory";
+
+    public bool IsProjectMemoryChangeApproved
+    {
+        get => _isProjectMemoryChangeApproved;
+        set
+        {
+            if (!SetField(ref _isProjectMemoryChangeApproved, value))
+            {
+                return;
+            }
+
+            SaveProjectMemoryCommand.NotifyCanExecuteChanged();
+            DeleteProjectMemoryCommand.NotifyCanExecuteChanged();
+
+            if (value)
+            {
+                StatusText =
+                    "One local project-memory change is approved. The " +
+                    "approval will be consumed by the next create, update, " +
+                    "or delete action.";
+            }
+        }
+    }
+
     public bool IsRepositoryPanelOpen
     {
         get => _isRepositoryPanelOpen;
@@ -652,6 +805,9 @@ public sealed class MainWindowViewModel :
             ApplyProposedPatchCommand.NotifyCanExecuteChanged();
             RollbackAppliedPatchCommand.NotifyCanExecuteChanged();
             ClearSelectedInstructionSkillCommand.NotifyCanExecuteChanged();
+            SaveProjectMemoryCommand.NotifyCanExecuteChanged();
+            DeleteProjectMemoryCommand.NotifyCanExecuteChanged();
+            ClearProjectMemoryEditorCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
             NewChatCommand.NotifyCanExecuteChanged();
         }
@@ -735,6 +891,7 @@ public sealed class MainWindowViewModel :
 
     private async Task LoadRepositoryAsync(string repositoryPath)
     {
+        ClearProjectMemory();
         IsBusy = true;
         StatusText = "Inspecting repository...";
 
@@ -783,6 +940,9 @@ public sealed class MainWindowViewModel :
             await LoadProjectInstructionsAsync(
                 repository.RootPath);
 
+            await LoadProjectMemoryAsync(
+                repository.RootPath);
+
             OnPropertyChanged(nameof(AgentEvidenceText));
             UpdateVerificationReadiness();
 
@@ -802,6 +962,7 @@ public sealed class MainWindowViewModel :
             SelectedRepositoryItem = null;
             ClearContextFiles();
             ClearProjectInstructions();
+            ClearProjectMemory();
             ClearVerificationHistory();
             ClearProposedPatchPreview();
             ClearPatchRollbackRecord();
@@ -1323,6 +1484,258 @@ public sealed class MainWindowViewModel :
             $"{ProjectInstructionSelectionBuilder.MaximumInstructionBytes:N0} B • " +
             $"~{_projectInstructionSelection.IncludedTokens:N0} / " +
             $"{ProjectInstructionSelectionBuilder.MaximumInstructionTokens:N0} tokens";
+    }
+
+    private async Task LoadProjectMemoryAsync(string repositoryRoot)
+    {
+        ProjectMemoryLoadResult result =
+            await _projectMemoryService.LoadAsync(repositoryRoot);
+
+        ProjectMemoryStoragePath = result.StoragePath;
+
+        if (!result.IsSuccess)
+        {
+            ProjectMemoryEntries.Clear();
+            SelectedProjectMemoryEntry = null;
+            UpdateProjectMemorySummary();
+            ProjectMemoryStatusText =
+                $"Project memory could not be loaded: {result.Error}";
+            return;
+        }
+
+        ReplaceProjectMemoryEntries(result.Entries);
+        ProjectMemoryStatusText = result.Entries.Count == 0
+            ? "No local project memory exists for this repository. " +
+              "Memory is not sent to the AI in Sprint 3.2."
+            : "Local project memory loaded. It remains excluded from AI " +
+              "prompts in Sprint 3.2.";
+    }
+
+    private bool CanSaveProjectMemory()
+    {
+        return !IsBusy &&
+               IsAgentMode &&
+               IsProjectMemoryChangeApproved &&
+               Directory.Exists(RepositoryPath) &&
+               !string.IsNullOrWhiteSpace(ProjectMemoryTitle) &&
+               !string.IsNullOrWhiteSpace(ProjectMemoryContent);
+    }
+
+    private bool CanDeleteProjectMemory()
+    {
+        return !IsBusy &&
+               IsAgentMode &&
+               IsProjectMemoryChangeApproved &&
+               Directory.Exists(RepositoryPath) &&
+               SelectedProjectMemoryEntry is not null;
+    }
+
+    private async Task SaveProjectMemoryAsync()
+    {
+        if (!CanSaveProjectMemory())
+        {
+            return;
+        }
+
+        Guid? entryId = SelectedProjectMemoryEntry?.Id;
+        IsProjectMemoryChangeApproved = false;
+        _requestCancellation?.Dispose();
+        _requestCancellation = new CancellationTokenSource();
+        IsBusy = true;
+        StatusText = entryId is null
+            ? "Creating approved local project memory..."
+            : "Updating approved local project memory...";
+
+        try
+        {
+            ProjectMemoryMutationResult result = entryId is null
+                ? await _projectMemoryService.CreateAsync(
+                    RepositoryPath,
+                    SelectedProjectMemoryCategory,
+                    ProjectMemoryTitle,
+                    ProjectMemoryContent,
+                    _requestCancellation.Token)
+                : await _projectMemoryService.UpdateAsync(
+                    RepositoryPath,
+                    entryId.Value,
+                    SelectedProjectMemoryCategory,
+                    ProjectMemoryTitle,
+                    ProjectMemoryContent,
+                    _requestCancellation.Token);
+
+            if (!result.IsSuccess)
+            {
+                ProjectMemoryStatusText = result.Error ??
+                    "Project memory was not changed.";
+                StatusText = "Project memory change was rejected safely.";
+                return;
+            }
+
+            ReplaceProjectMemoryEntries(
+                result.Entries,
+                result.ChangedEntry?.Id);
+            string operation = entryId is null ? "created" : "updated";
+            ProjectMemoryStatusText =
+                $"Project memory {operation}. Approval consumed. " +
+                "This memory was not sent to the AI.";
+            StatusText = ProjectMemoryStatusText;
+        }
+        catch (OperationCanceledException)
+        {
+            ProjectMemoryStatusText =
+                "Project memory change cancelled before completion.";
+            StatusText = ProjectMemoryStatusText;
+        }
+        catch (Exception exception)
+        {
+            ProjectMemoryStatusText =
+                $"Project memory was not changed: {exception.Message}";
+            StatusText = "Project memory change failed safely.";
+        }
+        finally
+        {
+            IsBusy = false;
+            _requestCancellation?.Dispose();
+            _requestCancellation = null;
+        }
+    }
+
+    private async Task DeleteProjectMemoryAsync()
+    {
+        if (!CanDeleteProjectMemory())
+        {
+            return;
+        }
+
+        Guid entryId = SelectedProjectMemoryEntry!.Id;
+        string title = SelectedProjectMemoryEntry.Title;
+        IsProjectMemoryChangeApproved = false;
+        _requestCancellation?.Dispose();
+        _requestCancellation = new CancellationTokenSource();
+        IsBusy = true;
+        StatusText = "Deleting approved local project memory...";
+
+        try
+        {
+            ProjectMemoryMutationResult result =
+                await _projectMemoryService.DeleteAsync(
+                    RepositoryPath,
+                    entryId,
+                    _requestCancellation.Token);
+
+            if (!result.IsSuccess)
+            {
+                ProjectMemoryStatusText = result.Error ??
+                    "Project memory was not deleted.";
+                StatusText = "Project memory delete was rejected safely.";
+                return;
+            }
+
+            ReplaceProjectMemoryEntries(result.Entries);
+            ClearProjectMemoryEditor();
+            ProjectMemoryStatusText =
+                $"Deleted local project memory '{title}'. Approval " +
+                "consumed. No repository file or AI prompt was changed.";
+            StatusText = ProjectMemoryStatusText;
+        }
+        catch (OperationCanceledException)
+        {
+            ProjectMemoryStatusText =
+                "Project memory delete cancelled before completion.";
+            StatusText = ProjectMemoryStatusText;
+        }
+        catch (Exception exception)
+        {
+            ProjectMemoryStatusText =
+                $"Project memory was not deleted: {exception.Message}";
+            StatusText = "Project memory delete failed safely.";
+        }
+        finally
+        {
+            IsBusy = false;
+            _requestCancellation?.Dispose();
+            _requestCancellation = null;
+        }
+    }
+
+    private void ReplaceProjectMemoryEntries(
+        IReadOnlyList<ProjectMemoryEntry> entries,
+        Guid? selectedId = null)
+    {
+        ProjectMemoryEntries.Clear();
+
+        foreach (ProjectMemoryEntry entry in entries)
+        {
+            ProjectMemoryEntries.Add(
+                new ProjectMemoryEntryViewModel(entry));
+        }
+
+        SelectedProjectMemoryEntry = selectedId is null
+            ? null
+            : ProjectMemoryEntries.FirstOrDefault(
+                item => item.Id == selectedId.Value);
+        UpdateProjectMemorySummary();
+    }
+
+    private void UpdateProjectMemorySummary()
+    {
+        long bytes = ProjectMemoryEntries.Sum(
+            entry => entry.Entry.SizeBytes);
+        int tokens = ProjectMemoryEntries.Sum(
+            entry => entry.Entry.EstimatedTokens);
+        ProjectMemorySummary =
+            $"{ProjectMemoryEntries.Count} / " +
+            $"{_projectMemoryService.MaximumEntries} entries • " +
+            $"{bytes:N0} / " +
+            $"{_projectMemoryService.MaximumCombinedBytes:N0} B • " +
+            $"~{tokens:N0} / " +
+            $"{_projectMemoryService.MaximumCombinedTokens:N0} tokens • " +
+            "not sent to AI";
+    }
+
+    private void ClearProjectMemoryEditor()
+    {
+        _selectedProjectMemoryEntry = null;
+        OnPropertyChanged(nameof(SelectedProjectMemoryEntry));
+        SetProjectMemoryEditor(
+            ProjectMemoryCategory.Architecture,
+            string.Empty,
+            string.Empty);
+        IsProjectMemoryChangeApproved = false;
+        OnPropertyChanged(nameof(ProjectMemorySaveActionText));
+        SaveProjectMemoryCommand.NotifyCanExecuteChanged();
+        DeleteProjectMemoryCommand.NotifyCanExecuteChanged();
+    }
+
+    private void SetProjectMemoryEditor(
+        ProjectMemoryCategory category,
+        string title,
+        string content)
+    {
+        _selectedProjectMemoryCategory = category;
+        _projectMemoryTitle = title;
+        _projectMemoryContent = content;
+        OnPropertyChanged(nameof(SelectedProjectMemoryCategory));
+        OnPropertyChanged(nameof(ProjectMemoryTitle));
+        OnPropertyChanged(nameof(ProjectMemoryContent));
+    }
+
+    private void ResetProjectMemoryApproval()
+    {
+        IsProjectMemoryChangeApproved = false;
+        SaveProjectMemoryCommand.NotifyCanExecuteChanged();
+        DeleteProjectMemoryCommand.NotifyCanExecuteChanged();
+    }
+
+    private void ClearProjectMemory()
+    {
+        ProjectMemoryEntries.Clear();
+        ProjectMemoryStoragePath = string.Empty;
+        ProjectMemorySummary =
+            "Select a repository to load local project memory.";
+        ProjectMemoryStatusText =
+            "Memory is local, user-managed, and not sent to the AI.";
+        ClearProjectMemoryEditor();
     }
 
     private void NotifyContextChanged()

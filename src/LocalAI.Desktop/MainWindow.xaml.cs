@@ -27,7 +27,8 @@ public partial class MainWindow : Window
             new RepositoryFileContextService(),
             new RepositoryPatchService(),
             new VerificationToolRunner(),
-            new ProjectInstructionService());
+            new ProjectInstructionService(),
+            new ProjectMemoryService());
 
         DataContext = _viewModel;
 

@@ -106,11 +106,14 @@
         </Border>
 
         <!-- Main chat -->
-        <Grid Grid.Column="1">
+        <Grid x:Name="MainChatGrid"
+              Grid.Column="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="64"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="2*"
+                               MinHeight="160"/>
+                <RowDefinition Height="3*"
+                               MinHeight="280"/>
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0"
@@ -224,15 +227,21 @@
                 </ItemsControl>
             </ScrollViewer>
 
-            <Grid Grid.Row="2"
+            <Grid x:Name="ComposerHostGrid"
+                  Grid.Row="2"
                   Margin="28,10,28,22">
-                <Border Padding="14"
-                        Background="White"
-                        BorderBrush="#D7D7D7"
-                        BorderThickness="1"
-                        CornerRadius="18">
+                <ScrollViewer x:Name="ComposerScrollViewer"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto"
+                              PanningMode="VerticalOnly">
+                    <Border Padding="14"
+                            Background="White"
+                            BorderBrush="#D7D7D7"
+                            BorderThickness="1"
+                            CornerRadius="18">
                     <Grid>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -416,6 +425,167 @@
                         <Border Grid.Row="3"
                                 Margin="4,0,4,10"
                                 Padding="10"
+                                Background="#F7F3FA"
+                                BorderBrush="#C8B7D4"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Visibility="{Binding IsAgentMode,
+                                    Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Expander HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <StackPanel>
+                                        <TextBlock FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#4F365F"
+                                                   Text="Project memory • Local and user-managed"/>
+
+                                        <TextBlock Margin="0,3,0,0"
+                                                   FontSize="9"
+                                                   Foreground="#6D5878"
+                                                   Text="{Binding ProjectMemorySummary}"/>
+                                    </StackPanel>
+                                </Expander.Header>
+
+                                <StackPanel Margin="0,8,0,0">
+                                    <TextBlock FontSize="9"
+                                               Foreground="#6D5878"
+                                               TextWrapping="Wrap"
+                                               Text="Sprint 3.2 memory is never added to AI prompts. Every create, update, or delete requires a separate consumed approval."/>
+
+                                    <TextBlock Margin="0,4,0,7"
+                                               FontFamily="Consolas"
+                                               FontSize="9"
+                                               Foreground="#786881"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding ProjectMemoryStoragePath}"
+                                               Text="{Binding ProjectMemoryStoragePath}"/>
+
+                                    <ListBox Height="104"
+                                             ItemsSource="{Binding ProjectMemoryEntries}"
+                                             SelectedItem="{Binding SelectedProjectMemoryEntry}"
+                                             ToolTip="Select an entry to review or edit it">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="3,2">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="92"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+
+                                                    <TextBlock FontSize="9"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="#6D5878"
+                                                               Text="{Binding CategoryText}"/>
+
+                                                    <TextBlock Grid.Column="1"
+                                                               Margin="6,0"
+                                                               FontSize="10"
+                                                               FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Text="{Binding Title}"/>
+
+                                                    <TextBlock Grid.Column="2"
+                                                               FontSize="9"
+                                                               Foreground="#786881"
+                                                               Text="{Binding SizeText}"/>
+
+                                                    <TextBlock Grid.Row="1"
+                                                               Grid.Column="1"
+                                                               Grid.ColumnSpan="2"
+                                                               Margin="6,2,0,0"
+                                                               FontSize="9"
+                                                               Foreground="#786881"
+                                                               Text="{Binding UpdatedText}"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <ComboBox Height="28"
+                                                  ItemsSource="{Binding AvailableProjectMemoryCategories}"
+                                                  SelectedItem="{Binding SelectedProjectMemoryCategory}"
+                                                  IsEnabled="{Binding IsNotBusy}"/>
+
+                                        <TextBox Grid.Column="1"
+                                                 Height="28"
+                                                 Margin="8,0,0,0"
+                                                 Padding="6,3"
+                                                 MaxLength="120"
+                                                 IsEnabled="{Binding IsNotBusy}"
+                                                 ToolTip="Memory title"
+                                                 Text="{Binding ProjectMemoryTitle,
+                                                        UpdateSourceTrigger=PropertyChanged}"/>
+                                    </Grid>
+
+                                    <TextBox Height="64"
+                                             Margin="0,7,0,0"
+                                             Padding="6"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             VerticalScrollBarVisibility="Auto"
+                                             IsEnabled="{Binding IsNotBusy}"
+                                             ToolTip="Memory content (maximum complete entry size: 1 KiB)"
+                                             Text="{Binding ProjectMemoryContent,
+                                                    UpdateSourceTrigger=PropertyChanged}"/>
+
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <CheckBox VerticalAlignment="Center"
+                                                  Content="Approve one memory change"
+                                                  IsChecked="{Binding IsProjectMemoryChangeApproved}"
+                                                  IsEnabled="{Binding IsNotBusy}"/>
+
+                                        <Button Grid.Column="1"
+                                                MinWidth="82"
+                                                Height="28"
+                                                Margin="8,0,0,0"
+                                                Command="{Binding ClearProjectMemoryEditorCommand}"
+                                                Content="New entry"/>
+
+                                        <Button Grid.Column="2"
+                                                MinWidth="72"
+                                                Height="28"
+                                                Margin="8,0,0,0"
+                                                Command="{Binding DeleteProjectMemoryCommand}"
+                                                Content="Delete"/>
+
+                                        <Button Grid.Column="3"
+                                                MinWidth="106"
+                                                Height="28"
+                                                Margin="8,0,0,0"
+                                                Command="{Binding SaveProjectMemoryCommand}"
+                                                Content="{Binding ProjectMemorySaveActionText}"/>
+                                    </Grid>
+
+                                    <TextBlock Margin="0,7,0,0"
+                                               FontSize="9"
+                                               Foreground="#6D5878"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding ProjectMemoryStatusText}"/>
+                                </StackPanel>
+                            </Expander>
+                        </Border>
+
+                        <Border Grid.Row="4"
+                                Margin="4,0,4,10"
+                                Padding="10"
                                 Background="#F5F7FA"
                                 BorderBrush="#CBD3DD"
                                 BorderThickness="1"
@@ -496,7 +666,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Row="4"
+                        <Border Grid.Row="5"
                                 MaxHeight="340"
                                 Margin="4,0,4,10"
                                 Padding="10"
@@ -599,7 +769,7 @@
                             </Grid>
                         </Border>
 
-                        <Border Grid.Row="4"
+                        <Border Grid.Row="5"
                                 Margin="4,0,4,10"
                                 Padding="10"
                                 Background="#FFF7E8"
@@ -648,7 +818,7 @@
                         </Border>
 
                         <TextBox x:Name="MessageInputTextBox"
-                                 Grid.Row="5"
+                                 Grid.Row="6"
                                  MinHeight="54"
                                  MaxHeight="160"
                                  Padding="4"
@@ -662,7 +832,7 @@
                                  Text="{Binding MessageInput,
                                                 UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <Grid Grid.Row="6"
+                        <Grid Grid.Row="7"
                               Margin="0,10,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -691,7 +861,8 @@
                             </StackPanel>
                         </Grid>
                     </Grid>
-                </Border>
+                    </Border>
+                </ScrollViewer>
 
                 <ProgressBar Height="3"
                              Margin="18,-3,18,0"
