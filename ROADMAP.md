@@ -44,7 +44,10 @@ sprint small, evidence-based, and safe.
   revalidation and stale-context clearing.
 - Disclosed post-apply Git diff check, isolated Release build, and
   Release tests with stop-on-failure audit evidence.
-- 100 automated tests passing at the current baseline.
+- Explicit, approval-gated current-session rollback that restores the exact
+  pre-apply bytes of the latest applied single file, followed by protected
+  Git diff and Git status confirmation.
+- 111 automated tests passing at the current baseline.
 
 ## Roadmap
 
@@ -171,7 +174,7 @@ restart, commit, push, model-directed tools, and unattended apply.
 - Automatically run configured verification after the apply.
 - Keep a before/after diff and a clear rollback path.
 
-**Phase 2 exit gate**
+**Phase 2 exit gate  Satisfied (`9758287`)**
 
 - No patch can apply without an approval click.
 - Failed patch application is atomic or safely rolled back.
