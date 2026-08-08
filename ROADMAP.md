@@ -192,6 +192,70 @@ restart, commit, push, model-directed tools, and unattended apply.
   feature work, test failure diagnosis, and release checks.
 - Let users review, edit, export, and delete all stored memory.
 
+**Sprint 3.1  Read-only project instruction manifest  Active**
+
+**User-visible goal:** Before Local-AI sends an agent prompt, show the local
+project instruction files that will be used, their precedence, size, estimated
+token cost, and inclusion or exclusion reason.
+
+**In scope:**
+
+- Discover only repository-root `AGENTS.md` and files matching
+  `skills/<name>/SKILL.md`.
+- Display a read-only manifest containing instruction type, relative path,
+  byte size, estimated tokens, inclusion state, and exclusion reason.
+- Visibly enable a valid root `AGENTS.md` by default.
+- Require the user to explicitly select at most one `SKILL.md`.
+- Keep product safety boundaries highest. Within an allowed task, compose
+  evidence in this order: user request, `AGENTS.md`, selected `SKILL.md`, then
+  selected source and retained verification evidence.
+- Enforce a combined instruction sub-budget of 8 KiB and approximately 2,000
+  estimated tokens, with full-file inclusion only and no silent truncation.
+- Reuse repository containment, link, secret, binary, text, and size
+  protections.
+- Clear instruction selections and manifest state when the repository changes.
+- Show missing, unsafe, unsupported, or over-budget instruction files honestly
+  instead of silently including or ignoring them.
+
+**Expected implementation scope:**
+
+- Core instruction manifest models, discovery interface, and prompt composer.
+- One read-only infrastructure discovery service.
+- Manifest display and one-skill selection in `MainWindow` and its view model.
+- Focused discovery, containment, precedence, budget, prompt, and view-model
+  tests.
+- Relevant README, architecture, decision, evaluation, and roadmap updates.
+
+**Safety boundaries:**
+
+- Instruction discovery and display are read-only.
+- Instruction files cannot override product safety rules or the current user
+  request.
+- Never follow linked files outside the selected repository.
+- Never infer, repair, generate, or rewrite missing instruction content.
+- Never automatically choose a skill, execute instructions, apply patches,
+  run tools, create memory, or contact a network service.
+
+**Acceptance criteria:**
+
+- Test deterministic discovery and ordering of root `AGENTS.md` and
+  `skills/<name>/SKILL.md`.
+- Test explicit one-skill selection, repository-change clearing, and manifest
+  provenance.
+- Test outside-root, linked, secret, binary, malformed, oversized, duplicate,
+  and over-budget rejection.
+- Test prompt precedence and confirm excluded instructions are never sent.
+- A manual repository test must visibly show `AGENTS.md`, one selected skill,
+  token estimates, precedence, and exclusion reasons.
+- Release build, all existing and new tests, `git diff --check`, and final-diff
+  review must pass.
+
+**Out of scope:** persistent project memory, automatic or semantic skill
+selection, multiple simultaneous skills, nested `AGENTS.md`, `CLAUDE.md` and
+other instruction formats, instruction editing, skill creation, model training,
+self-modification, cloud access, new tool permissions, repository writes,
+commits, pushes, or unattended execution.
+
 **Phase 3 exit gate**
 
 - Project memory stays local and is visibly attributable to its source.
