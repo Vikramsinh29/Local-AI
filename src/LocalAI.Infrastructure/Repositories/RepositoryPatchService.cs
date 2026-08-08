@@ -113,7 +113,15 @@ public sealed class RepositoryPatchService : IRepositoryPatchService
                 encoded,
                 cancellationToken);
 
-            return PatchApplyResult.Success(normalizedPath);
+            PatchRollbackRecord rollbackRecord = new(
+                root,
+                normalizedPath,
+                sourceBytes,
+                encoded);
+
+            return PatchApplyResult.Success(
+                normalizedPath,
+                rollbackRecord);
         }
         catch (OperationCanceledException)
         {
@@ -127,6 +135,123 @@ public sealed class RepositoryPatchService : IRepositoryPatchService
         {
             return PatchApplyResult.Failure(
                 $"The reviewed patch could not be applied safely: " +
+                exception.Message);
+        }
+    }
+
+    public async Task<PatchRollbackResult> RollbackAsync(
+        string repositoryRoot,
+        PatchRollbackRecord rollbackRecord,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
+        ArgumentNullException.ThrowIfNull(rollbackRecord);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        string root;
+        string recordedRoot;
+
+        try
+        {
+            root = Path.TrimEndingDirectorySeparator(
+                Path.GetFullPath(repositoryRoot));
+            recordedRoot = Path.TrimEndingDirectorySeparator(
+                Path.GetFullPath(rollbackRecord.RepositoryRoot));
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException or
+            NotSupportedException or
+            PathTooLongException)
+        {
+            return PatchRollbackResult.Failure(
+                "The rollback repository path is invalid.");
+        }
+
+        if (!root.Equals(
+                recordedRoot,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return PatchRollbackResult.Failure(
+                "The selected repository changed after the patch was applied.");
+        }
+
+        if (!Directory.Exists(root) ||
+            RepositorySourcePathValidator.IsReparsePoint(root))
+        {
+            return PatchRollbackResult.Failure(
+                "The selected repository root is unavailable or linked.");
+        }
+
+        string gitPath = Path.Combine(root, ".git");
+
+        if (!Directory.Exists(gitPath) ||
+            RepositorySourcePathValidator.IsReparsePoint(gitPath))
+        {
+            return PatchRollbackResult.Failure(
+                "Approved rollback requires the original local Git repository.");
+        }
+
+        string? pathError = RepositorySourcePathValidator.Validate(
+            root,
+            rollbackRecord.RelativePath,
+            out string normalizedPath,
+            out string fullPath);
+
+        if (pathError is not null)
+        {
+            return PatchRollbackResult.Failure(pathError);
+        }
+
+        if (!normalizedPath.Equals(
+                rollbackRecord.RelativePath,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return PatchRollbackResult.Failure(
+                "The rollback source path no longer matches the applied patch.");
+        }
+
+        try
+        {
+            if (!File.Exists(fullPath) ||
+                new FileInfo(fullPath).Length !=
+                rollbackRecord.AppliedBytes.Length)
+            {
+                return PatchRollbackResult.Failure(
+                    $"The applied source file '{normalizedPath}' is " +
+                    "unavailable or was externally changed.");
+            }
+
+            byte[] currentBytes = await File.ReadAllBytesAsync(
+                fullPath,
+                cancellationToken);
+
+            if (!currentBytes.AsSpan().SequenceEqual(
+                    rollbackRecord.AppliedBytes.Span))
+            {
+                return PatchRollbackResult.Failure(
+                    $"The applied source file '{normalizedPath}' was " +
+                    "externally changed after apply.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            await ReplaceAtomicallyAsync(
+                root,
+                fullPath,
+                rollbackRecord.OriginalBytes.ToArray(),
+                cancellationToken);
+
+            return PatchRollbackResult.Success(normalizedPath);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (
+            exception is IOException or
+            UnauthorizedAccessException)
+        {
+            return PatchRollbackResult.Failure(
+                "The applied patch could not be rolled back safely: " +
                 exception.Message);
         }
     }
@@ -311,3 +436,4 @@ public sealed class RepositoryPatchService : IRepositoryPatchService
         byte[] Preamble,
         string LineEnding);
 }
+

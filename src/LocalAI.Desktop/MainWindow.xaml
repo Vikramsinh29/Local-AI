@@ -147,6 +147,7 @@
 
                         <ComboBox Width="210"
                                   Height="34"
+                                  VerticalContentAlignment="Center"
                                   Margin="0,0,10,0"
                                   ItemsSource="{Binding Models}"
                                   SelectedItem="{Binding SelectedModel}"
@@ -154,6 +155,7 @@
 
                         <ComboBox Width="105"
                                   Height="34"
+                                  VerticalContentAlignment="Center"
                                   Margin="0,0,10,0"
                                   DisplayMemberPath="Name"
                                   ItemsSource="{Binding AvailableGenerationProfiles}"
@@ -270,7 +272,7 @@
                                 <TextBlock FontSize="11"
                                            FontWeight="SemiBold"
                                            Foreground="#654F00"
-                                           Text="Controlled agent • No source patch applied"/>
+                                           Text="Controlled agent • Explicit approval required for writes"/>
 
                                 <TextBlock Margin="0,4,0,0"
                                            FontSize="10"
@@ -469,6 +471,54 @@
                                     </StackPanel>
                                 </StackPanel>
                             </Grid>
+                        </Border>
+
+                        <Border Grid.Row="3"
+                                Margin="4,0,4,10"
+                                Padding="10"
+                                Background="#FFF7E8"
+                                BorderBrush="#D8A94B"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Visibility="{Binding HasPatchRollback,
+                                    Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="#624400"
+                                           Text="Rollback available • Current session only"/>
+
+                                <TextBlock Margin="0,5,0,0"
+                                           FontSize="10"
+                                           Foreground="#70581F"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding PatchRollbackSummaryText}"/>
+
+                                <TextBlock Margin="0,5,0,0"
+                                           FontSize="10"
+                                           Foreground="#70581F"
+                                           TextWrapping="Wrap"
+                                           Text="Local-AI will restore only the exact latest applied file after revalidating the repository and applied bytes. External edits are rejected. Git diff check and Git status run afterward."/>
+
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <CheckBox VerticalAlignment="Center"
+                                              Content="Approve one rollback"
+                                              IsChecked="{Binding IsPatchRollbackApproved}"
+                                              IsEnabled="{Binding IsNotBusy}"/>
+
+                                    <Button Grid.Column="1"
+                                            MinWidth="146"
+                                            Height="28"
+                                            Margin="10,0,0,0"
+                                            Command="{Binding RollbackAppliedPatchCommand}"
+                                            Content="Rollback applied patch"/>
+                                </Grid>
+                            </StackPanel>
                         </Border>
 
                         <TextBox x:Name="MessageInputTextBox"
@@ -731,3 +781,4 @@
         </Border>
     </Grid>
 </Window>
+

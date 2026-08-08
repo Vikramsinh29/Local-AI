@@ -525,7 +525,8 @@ public sealed class MainWindowViewModelTests
         FakeRepositoryPatchService patchService = new(
             (_, preview, _) => Task.FromResult(
                 PatchApplyResult.Success(
-                    preview.Files[0].RelativePath)));
+                    preview.Files[0].RelativePath,
+                    CreateRollbackRecord(repositoryRoot))));
 
         try
         {
@@ -558,6 +559,7 @@ public sealed class MainWindowViewModelTests
             Assert.Equal(1, patchService.ApplyCount);
             Assert.False(viewModel.IsPatchApplyApproved);
             Assert.False(viewModel.HasProposedPatchPreview);
+            Assert.True(viewModel.HasPatchRollback);
             Assert.Empty(viewModel.ContextFiles);
             Assert.Equal(4, viewModel.VerificationAuditEntries.Count);
             Assert.Contains("all passed", viewModel.StatusText);
@@ -889,6 +891,242 @@ public sealed class MainWindowViewModelTests
         }
     }
 
+    [Fact]
+    public async Task PatchRollback_RequiresApprovalThenConfirmsCleanGit()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        FakeVerificationToolRunner runner = CreateGitStatusRunner("## main");
+        FakeRepositoryPatchService patchService = new(
+            apply: (_, preview, _) => Task.FromResult(
+                PatchApplyResult.Success(
+                    preview.Files[0].RelativePath,
+                    CreateRollbackRecord(repositoryRoot))),
+            rollback: (_, record, _) => Task.FromResult(
+                PatchRollbackResult.Success(record.RelativePath)));
+
+        try
+        {
+            using MainWindowViewModel viewModel =
+                await CreateViewModelWithPatchPreviewAsync(
+                    repositoryRoot,
+                    runner,
+                    patchService);
+            viewModel.IsPatchApplyApproved = true;
+            await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
+
+            Assert.True(viewModel.HasPatchRollback);
+            Assert.False(
+                viewModel.RollbackAppliedPatchCommand.CanExecute(null));
+
+            viewModel.IsPatchRollbackApproved = true;
+
+            Assert.True(
+                viewModel.RollbackAppliedPatchCommand.CanExecute(null));
+
+            await viewModel.RollbackAppliedPatchCommand.ExecuteAsync();
+
+            Assert.Equal(1, patchService.RollbackCount);
+            Assert.False(viewModel.IsPatchRollbackApproved);
+            Assert.False(viewModel.HasPatchRollback);
+            Assert.Equal(
+                new[]
+                {
+                    VerificationToolKind.GitDiffCheck,
+                    VerificationToolKind.GitStatus
+                },
+                runner.RunTools.TakeLast(2).ToArray());
+            Assert.Contains("Git status is clean", viewModel.StatusText);
+            Assert.Contains(
+                "exact pre-apply bytes",
+                viewModel.Messages[^1].Content);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task PatchRollback_RejectionConsumesApprovalAndRetainsRecord()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        FakeVerificationToolRunner runner = CreateGitStatusRunner("## main");
+        FakeRepositoryPatchService patchService = new(
+            apply: (_, preview, _) => Task.FromResult(
+                PatchApplyResult.Success(
+                    preview.Files[0].RelativePath,
+                    CreateRollbackRecord(repositoryRoot))),
+            rollback: (_, _, _) => Task.FromResult(
+                PatchRollbackResult.Failure(
+                    "The applied source file was externally changed.")));
+
+        try
+        {
+            using MainWindowViewModel viewModel =
+                await CreateViewModelWithPatchPreviewAsync(
+                    repositoryRoot,
+                    runner,
+                    patchService);
+            viewModel.IsPatchApplyApproved = true;
+            await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
+            int runsAfterApply = runner.RunCount;
+            viewModel.IsPatchRollbackApproved = true;
+
+            await viewModel.RollbackAppliedPatchCommand.ExecuteAsync();
+
+            Assert.Equal(1, patchService.RollbackCount);
+            Assert.False(viewModel.IsPatchRollbackApproved);
+            Assert.True(viewModel.HasPatchRollback);
+            Assert.Equal(runsAfterApply, runner.RunCount);
+            Assert.Contains("externally changed", viewModel.StatusText);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task PatchRollback_RepositoryRefreshInvalidatesRecord()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        FakeVerificationToolRunner runner = CreateGitStatusRunner("## main");
+        FakeRepositoryPatchService patchService = new(
+            (_, preview, _) => Task.FromResult(
+                PatchApplyResult.Success(
+                    preview.Files[0].RelativePath,
+                    CreateRollbackRecord(repositoryRoot))));
+
+        try
+        {
+            using MainWindowViewModel viewModel =
+                await CreateViewModelWithPatchPreviewAsync(
+                    repositoryRoot,
+                    runner,
+                    patchService);
+            viewModel.IsPatchApplyApproved = true;
+            await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
+            Assert.True(viewModel.HasPatchRollback);
+
+            await viewModel.RefreshRepositoryCommand.ExecuteAsync();
+
+            Assert.False(viewModel.HasPatchRollback);
+            Assert.False(
+                viewModel.RollbackAppliedPatchCommand.CanExecute(null));
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task PatchRollback_NewPreviewInvalidatesPreviousRecord()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        FakeVerificationToolRunner runner = CreateGitStatusRunner("## main");
+        FakeRepositoryPatchService patchService = new(
+            (_, preview, _) => Task.FromResult(
+                PatchApplyResult.Success(
+                    preview.Files[0].RelativePath,
+                    CreateRollbackRecord(repositoryRoot))));
+
+        try
+        {
+            using MainWindowViewModel viewModel =
+                await CreateViewModelWithPatchPreviewAsync(
+                    repositoryRoot,
+                    runner,
+                    patchService);
+            viewModel.IsPatchApplyApproved = true;
+            await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
+            Assert.True(viewModel.HasPatchRollback);
+
+            viewModel.ContextFiles.Add(
+                new RepositoryContextFileViewModel(
+                    new RepositoryContextFile(
+                        "src/Program.cs",
+                        "return 42;",
+                        10)));
+            viewModel.MessageInput = "Create another preview.";
+
+            await viewModel.SendCommand.ExecuteAsync();
+
+            Assert.True(viewModel.HasProposedPatchPreview);
+            Assert.False(viewModel.HasPatchRollback);
+            Assert.False(viewModel.IsPatchRollbackApproved);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task PatchRollback_StopsConfirmationWhenDiffCheckFails()
+    {
+        string repositoryRoot = CreateTemporaryRepository();
+        CreatePatchSourceFile(repositoryRoot);
+        int diffCheckCount = 0;
+        FakeVerificationToolRunner runner = new(
+            (tool, _, _, _, _) =>
+            {
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                bool rollbackDiffFailure =
+                    tool == VerificationToolKind.GitDiffCheck &&
+                    ++diffCheckCount == 2;
+                return Task.FromResult(
+                    new VerificationRunResult(
+                        tool,
+                        tool.ToString(),
+                        now,
+                        now,
+                        ExitCode: rollbackDiffFailure ? 1 : 0,
+                        WasCancelled: false,
+                        Output: tool == VerificationToolKind.GitStatus
+                            ? "## main"
+                            : "verification output"));
+            });
+        FakeRepositoryPatchService patchService = new(
+            apply: (_, preview, _) => Task.FromResult(
+                PatchApplyResult.Success(
+                    preview.Files[0].RelativePath,
+                    CreateRollbackRecord(repositoryRoot))),
+            rollback: (_, record, _) => Task.FromResult(
+                PatchRollbackResult.Success(record.RelativePath)));
+
+        try
+        {
+            using MainWindowViewModel viewModel =
+                await CreateViewModelWithPatchPreviewAsync(
+                    repositoryRoot,
+                    runner,
+                    patchService);
+            viewModel.IsPatchApplyApproved = true;
+            await viewModel.ApplyProposedPatchCommand.ExecuteAsync();
+            int runsAfterApply = runner.RunCount;
+            viewModel.IsPatchRollbackApproved = true;
+
+            await viewModel.RollbackAppliedPatchCommand.ExecuteAsync();
+
+            Assert.Equal(runsAfterApply + 1, runner.RunCount);
+            Assert.Equal(
+                VerificationToolKind.GitDiffCheck,
+                runner.RunTools[^1]);
+            Assert.False(viewModel.HasPatchRollback);
+            Assert.Contains("diff check failed", viewModel.StatusText);
+            Assert.Contains("rollback remains applied", viewModel.StatusText);
+        }
+        finally
+        {
+            DeleteTemporaryRepository(repositoryRoot);
+        }
+    }
+
     private static FakeVerificationToolRunner CreateGitStatusRunner(
         string output)
     {
@@ -1056,6 +1294,16 @@ public sealed class MainWindowViewModelTests
             "<<<END_LOCAL_AI_PATCH>>>";
     }
 
+    private static PatchRollbackRecord CreateRollbackRecord(
+        string repositoryRoot)
+    {
+        return new PatchRollbackRecord(
+            repositoryRoot,
+            Path.Combine("src", "Program.cs"),
+            "return 42;\n"u8.ToArray(),
+            "return 43;\n"u8.ToArray());
+    }
+
     private static void CreatePatchSourceFile(string repositoryRoot)
     {
         string sourceDirectory = Path.Combine(repositoryRoot, "src");
@@ -1157,10 +1405,17 @@ public sealed class MainWindowViewModelTests
             string,
             ProposedPatchPreview,
             CancellationToken,
-            Task<PatchApplyResult>>? apply = null) :
+            Task<PatchApplyResult>>? apply = null,
+        Func<
+            string,
+            PatchRollbackRecord,
+            CancellationToken,
+            Task<PatchRollbackResult>>? rollback = null) :
         IRepositoryPatchService
     {
         public int ApplyCount { get; private set; }
+
+        public int RollbackCount { get; private set; }
 
         public Task<PatchApplyResult> ApplyAsync(
             string repositoryRoot,
@@ -1172,6 +1427,21 @@ public sealed class MainWindowViewModelTests
             return apply is null
                 ? throw new NotSupportedException()
                 : apply(repositoryRoot, preview, cancellationToken);
+        }
+
+        public Task<PatchRollbackResult> RollbackAsync(
+            string repositoryRoot,
+            PatchRollbackRecord rollbackRecord,
+            CancellationToken cancellationToken = default)
+        {
+            RollbackCount++;
+
+            return rollback is null
+                ? throw new NotSupportedException()
+                : rollback(
+                    repositoryRoot,
+                    rollbackRecord,
+                    cancellationToken);
         }
     }
 
@@ -1190,3 +1460,4 @@ public sealed class MainWindowViewModelTests
             throw new NotSupportedException();
     }
 }
+

@@ -115,7 +115,7 @@ for a selected repository, without allowing it to change anything.
 - When no single solution is available, report build/tests as not run rather
   than inventing a result.
 
-**Sprint 2.3  Explicit current-session single-file rollback  Active**
+**Sprint 2.3 — Explicit current-session single-file rollback — Active**
 
 **User-visible goal:** After one approved patch is applied, let the user
 explicitly restore that exact file to its pre-apply bytes during the current
@@ -243,8 +243,12 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** None — planning checkpoint.
+**Status:** Sprint 2.3 — implementation approved.
 
-Sprint 2.2 is complete at `9e62121`. No later sprint has been approved
-or started. The next Phase 2 sprint must be defined using the Sprint Template
-before implementation begins.
+Implement only the latest-applied, current-session, single-file rollback
+described above. Require a separate one-run approval; revalidate the repository,
+path, links, and exact applied bytes; atomically restore the exact original
+bytes; and retain protected Git diff/status confirmation. Do not add automatic
+rollback, restart persistence, multi-file undo, Git reset/checkout, commits,
+pushes, arbitrary shell access, or model-directed rollback.
+

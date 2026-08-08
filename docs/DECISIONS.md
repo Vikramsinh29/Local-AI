@@ -103,3 +103,21 @@ leave an unverified change without a clear outcome. Reusing the existing
 allow-list avoids a new command surface. Stop-on-failure prevents misleading
 downstream test claims, while explicit no-rollback wording preserves the narrow
 scope until rollback is designed separately.
+
+## D-010 — Rollback is exact, single-file, and current-session only
+
+**Decision:** Sprint 2.3 retains the exact original and applied bytes, canonical
+repository identity, validated path, and hashes for only the latest successful
+one-file apply. A separate one-run rollback approval is consumed before the
+service revalidates the repository, links, path, and exact applied bytes. Only
+then may it atomically restore the exact original bytes and run protected Git
+diff/status confirmation. The record remains in memory only and is invalidated
+after success, repository change, a newer preview/apply, or restart.
+
+**Reason:** Exact retained bytes make rollback deterministic and preserve the
+original encoding, BOM, and line endings. Rejecting any external edit avoids
+overwriting newer user work. A narrow current-session record provides useful
+recovery without introducing persistent undo state, multi-file transactions,
+Git reset/checkout, arbitrary commands, commits, pushes, or model-directed
+writes.
+

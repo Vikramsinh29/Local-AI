@@ -105,6 +105,28 @@ Post-apply verification reuses only the fixed verification boundary:
 - Sprint 2.2 adds no new executable, command arguments, restore, commit, push,
   rollback, multi-file transaction, or unattended action.
 
+Current-session rollback crosses a second explicit write boundary:
+
+- A successful one-file apply retains an in-memory record containing the
+  canonical repository root, validated relative path, exact original and
+  applied bytes, and both SHA-256 hashes. Nothing is persisted across restart.
+- Desktop exposes a separate `Approve one rollback` control, consumes that
+  approval before the attempt, and permits only the latest successful apply.
+- Infrastructure revalidates the same repository and Git metadata, shared path
+  and link rules, and an exact byte-for-byte match with the applied snapshot.
+  A changed repository, path, link, or file is rejected without writing.
+- A valid rollback atomically restores the retained original bytes through the
+  same protected `.local-ai/apply` staging boundary, preserving the original
+  encoding, BOM, and line endings exactly.
+- After restoration, Desktop runs only protected Git diff check and Git status,
+  retains both results in the current-session audit, and reports an uncertain
+  or dirty final state honestly. Confirmation failure does not undo the
+  already-completed rollback.
+- The record is invalidated after successful rollback, repository refresh or
+  change, a newer preview/apply, or application restart. Sprint 2.3 adds no Git
+  reset/checkout, persistent history, multi-file undo, commit, push, arbitrary
+  command, model-directed action, or automatic rollback.
+
 ## Change rules
 
 1. Start from the smallest affected layer.
@@ -113,3 +135,4 @@ Post-apply verification reuses only the fixed verification boundary:
 4. Preserve the existing UI design and binding patterns.
 5. Add focused tests for normal, rejected, cancellation, and failure paths.
 6. Verify with the commands in `README.md` before committing.
+

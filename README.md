@@ -22,9 +22,12 @@ an external AI service.
   requirement, source-snapshot revalidation, and atomic replacement.
 - Disclosed post-apply Git diff check plus isolated Release build/tests when
   exactly one .NET solution is detected, with stop-on-failure audit evidence.
+- Explicit current-session rollback for only the latest applied file, using a
+  separate one-run approval, exact-byte revalidation/restoration, and protected
+  Git diff/status confirmation.
 
 The current roadmap is in [ROADMAP.md](ROADMAP.md). The active scope is Phase
-2, Sprint 2.2: verifying one approved apply with the existing fixed tools.
+2, Sprint 2.3: exact current-session rollback of the latest one-file apply.
 Local-AI does not provide an arbitrary terminal and must not restore packages,
 commit, push, or apply model output that was not separately reviewed and
 approved.
@@ -53,3 +56,4 @@ dotnet test LocalAI.slnx -c Release --no-build
 Read [AGENTS.md](AGENTS.md) before making changes. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for dependency rules and
 [docs/DECISIONS.md](docs/DECISIONS.md) for settled decisions.
+

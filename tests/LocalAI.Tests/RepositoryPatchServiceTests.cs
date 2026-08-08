@@ -33,6 +33,7 @@ public sealed class RepositoryPatchServiceTests : IDisposable
             _sourcePath,
             "return 42;\r\n",
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        byte[] originalBytes = await File.ReadAllBytesAsync(_sourcePath);
         ProposedPatchPreview preview = BuildPreview();
         RepositoryPatchService service = new();
 
@@ -51,9 +52,161 @@ public sealed class RepositoryPatchServiceTests : IDisposable
         Assert.Equal(
             "return 43;\r\n",
             await File.ReadAllTextAsync(_sourcePath));
+        PatchRollbackRecord rollbackRecord =
+            Assert.IsType<PatchRollbackRecord>(result.RollbackRecord);
+        Assert.True(
+            originalBytes.AsSpan().SequenceEqual(
+                rollbackRecord.OriginalBytes.Span));
         Assert.Empty(
             Directory.EnumerateFiles(
                 Path.Combine(_repositoryRoot, ".local-ai", "apply")));
+    }
+
+    [Fact]
+    public async Task RollbackAsync_RestoresExactOriginalBytes()
+    {
+        await File.WriteAllTextAsync(
+            _sourcePath,
+            "return 42;\r\n",
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        byte[] originalBytes = await File.ReadAllBytesAsync(_sourcePath);
+        RepositoryPatchService service = new();
+        PatchApplyResult apply = await service.ApplyAsync(
+            _repositoryRoot,
+            BuildPreview());
+
+        PatchRollbackResult rollback = await service.RollbackAsync(
+            _repositoryRoot,
+            apply.RollbackRecord!);
+
+        Assert.True(rollback.IsSuccess, rollback.Error);
+        Assert.Equal(
+            Path.Combine("src", "Program.cs"),
+            rollback.RolledBackRelativePath);
+        byte[] restoredBytes = await File.ReadAllBytesAsync(_sourcePath);
+        Assert.True(originalBytes.AsSpan().SequenceEqual(restoredBytes));
+        Assert.Empty(
+            Directory.EnumerateFiles(
+                Path.Combine(_repositoryRoot, ".local-ai", "apply")));
+    }
+
+    [Fact]
+    public async Task RollbackAsync_RejectsExternalEditAfterApply()
+    {
+        await File.WriteAllTextAsync(_sourcePath, "return 42;\n");
+        RepositoryPatchService service = new();
+        PatchApplyResult apply = await service.ApplyAsync(
+            _repositoryRoot,
+            BuildPreview());
+        await File.WriteAllTextAsync(_sourcePath, "return 99;\n");
+
+        PatchRollbackResult rollback = await service.RollbackAsync(
+            _repositoryRoot,
+            apply.RollbackRecord!);
+
+        Assert.False(rollback.IsSuccess);
+        Assert.Contains("externally changed", rollback.Error!);
+        Assert.Equal(
+            "return 99;\n",
+            await File.ReadAllTextAsync(_sourcePath));
+    }
+
+    [Fact]
+    public async Task RollbackAsync_RejectsDifferentRepositoryRoot()
+    {
+        await File.WriteAllTextAsync(_sourcePath, "return 42;\n");
+        RepositoryPatchService service = new();
+        PatchApplyResult apply = await service.ApplyAsync(
+            _repositoryRoot,
+            BuildPreview());
+
+        PatchRollbackResult rollback = await service.RollbackAsync(
+            _repositoryRoot + "-different",
+            apply.RollbackRecord!);
+
+        Assert.False(rollback.IsSuccess);
+        Assert.Contains("repository changed", rollback.Error!);
+        Assert.Equal(
+            "return 43;\n",
+            await File.ReadAllTextAsync(_sourcePath));
+    }
+
+    [Fact]
+    public async Task RollbackAsync_RejectsUnsafeRecordedPath()
+    {
+        await File.WriteAllTextAsync(_sourcePath, "return 43;\n");
+        PatchRollbackRecord unsafeRecord = new(
+            _repositoryRoot,
+            "../outside.cs",
+            "return 42;\n"u8.ToArray(),
+            "return 43;\n"u8.ToArray());
+        RepositoryPatchService service = new();
+
+        PatchRollbackResult rollback = await service.RollbackAsync(
+            _repositoryRoot,
+            unsafeRecord);
+
+        Assert.False(rollback.IsSuccess);
+        Assert.Contains("invalid", rollback.Error!);
+        Assert.Equal(
+            "return 43;\n",
+            await File.ReadAllTextAsync(_sourcePath));
+    }
+
+    [Fact]
+    public async Task RollbackAsync_RejectsLinkedRepositoryRoot()
+    {
+        await File.WriteAllTextAsync(_sourcePath, "return 43;\n");
+        string linkedRoot = _repositoryRoot + "-linked";
+        CreateDirectoryJunction(linkedRoot, _repositoryRoot);
+        PatchRollbackRecord linkedRecord = new(
+            linkedRoot,
+            Path.Combine("src", "Program.cs"),
+            "return 42;\n"u8.ToArray(),
+            "return 43;\n"u8.ToArray());
+        RepositoryPatchService service = new();
+
+        try
+        {
+            PatchRollbackResult rollback = await service.RollbackAsync(
+                linkedRoot,
+                linkedRecord);
+
+            Assert.False(rollback.IsSuccess);
+            Assert.Contains("linked", rollback.Error!);
+            Assert.Equal(
+                "return 43;\n",
+                await File.ReadAllTextAsync(_sourcePath));
+        }
+        finally
+        {
+            if (Directory.Exists(linkedRoot))
+            {
+                Directory.Delete(linkedRoot);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task RollbackAsync_HonorsCancellationBeforeWriting()
+    {
+        await File.WriteAllTextAsync(_sourcePath, "return 42;\n");
+        RepositoryPatchService service = new();
+        PatchApplyResult apply = await service.ApplyAsync(
+            _repositoryRoot,
+            BuildPreview());
+        using CancellationTokenSource cancellation = new();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => service.RollbackAsync(
+                _repositoryRoot,
+                apply.RollbackRecord!,
+                cancellation.Token));
+
+        Assert.Equal(
+            "return 43;\n",
+            await File.ReadAllTextAsync(_sourcePath));
     }
 
     [Fact]
@@ -163,6 +316,33 @@ public sealed class RepositoryPatchServiceTests : IDisposable
         return parsed.Preview!;
     }
 
+    private static void CreateDirectoryJunction(
+        string junctionPath,
+        string targetPath)
+    {
+        System.Diagnostics.ProcessStartInfo startInfo = new()
+        {
+            FileName = "powershell.exe",
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        startInfo.ArgumentList.Add("-NoProfile");
+        startInfo.ArgumentList.Add("-NonInteractive");
+        startInfo.ArgumentList.Add("-Command");
+        startInfo.ArgumentList.Add(
+            $"New-Item -ItemType Junction -Path " +
+            $"'{junctionPath.Replace("'", "''")}' -Target " +
+            $"'{targetPath.Replace("'", "''")}' | Out-Null");
+
+        using System.Diagnostics.Process process =
+            System.Diagnostics.Process.Start(startInfo)!;
+
+        process.WaitForExit();
+        Assert.Equal(0, process.ExitCode);
+        Assert.True(Directory.Exists(junctionPath));
+    }
+
     public void Dispose()
     {
         try
@@ -175,3 +355,4 @@ public sealed class RepositoryPatchServiceTests : IDisposable
         }
     }
 }
+

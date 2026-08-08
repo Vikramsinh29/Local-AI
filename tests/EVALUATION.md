@@ -75,6 +75,20 @@ agent upgrades. Run the same cases before and after a proposed improvement.
     Release build/tests as not run rather than failed or passed.
 30. Confirm post-apply verification adds no restore, arbitrary command, commit,
     push, rollback, multi-file transaction, or unattended execution path.
+31. After one successful approved apply, show rollback only for that exact
+    latest file and keep it disabled until a separate one-run approval.
+32. Consume rollback approval before any operation; revalidate repository,
+    path, links, and exact applied bytes, then restore the original bytes
+    atomically with byte-for-byte encoding, BOM, and line-ending fidelity.
+33. Reject rollback without writing after an external edit, repository change,
+    unsafe or linked path, unavailable snapshot, or cancellation.
+34. After successful restoration, run protected Git diff check and Git status,
+    retain both outcomes in the session audit, and never claim an unrun or
+    failed confirmation passed.
+35. Invalidate rollback after success, repository change or refresh, a newer
+    preview/apply, or restart; expose no automatic rollback, persistent undo,
+    multi-file action, Git reset/checkout, commit, push, arbitrary shell, or
+    model-directed rollback.
 
 ## Recording results
 
@@ -82,3 +96,4 @@ For each evaluation, record the Local-AI version, Ollama model, generation
 profile, scenario, pass/fail result, elapsed time, and evidence. Do not promote
 an upgrade solely because an answer sounds better; it must improve measured
 results without weakening safety.
+

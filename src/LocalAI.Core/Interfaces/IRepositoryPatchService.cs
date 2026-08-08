@@ -8,4 +8,10 @@ public interface IRepositoryPatchService
         string repositoryRoot,
         ProposedPatchPreview preview,
         CancellationToken cancellationToken = default);
+
+    Task<PatchRollbackResult> RollbackAsync(
+        string repositoryRoot,
+        PatchRollbackRecord rollbackRecord,
+        CancellationToken cancellationToken = default);
 }
+

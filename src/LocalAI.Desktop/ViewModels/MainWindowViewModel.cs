@@ -47,6 +47,7 @@ public sealed class MainWindowViewModel :
     private VerificationAuditEntryViewModel?
         _selectedVerificationAuditEntry;
     private ProposedPatchPreview? _proposedPatchPreview;
+    private PatchRollbackRecord? _patchRollbackRecord;
     private string? _repositorySolutionFile;
     private string _verificationOutput =
         "No verification command has been run in this session.";
@@ -55,6 +56,7 @@ public sealed class MainWindowViewModel :
     private bool _repositoryIsGit;
     private bool _isVerificationApproved;
     private bool _isPatchApplyApproved;
+    private bool _isPatchRollbackApproved;
     private bool _isPatchPreviewRequested;
     private bool _isRepositoryPanelOpen;
     private bool _isAgentMode;
@@ -132,6 +134,10 @@ public sealed class MainWindowViewModel :
             ApplyProposedPatchAsync,
             CanApplyProposedPatch);
 
+        RollbackAppliedPatchCommand = new AsyncRelayCommand(
+            RollbackAppliedPatchAsync,
+            CanRollbackAppliedPatch);
+
         CancelCommand = new RelayCommand(
             Cancel,
             () => IsBusy);
@@ -192,6 +198,8 @@ public sealed class MainWindowViewModel :
     public RelayCommand DismissPatchPreviewCommand { get; }
 
     public AsyncRelayCommand ApplyProposedPatchCommand { get; }
+
+    public AsyncRelayCommand RollbackAppliedPatchCommand { get; }
 
     public RelayCommand CancelCommand { get; }
 
@@ -266,6 +274,7 @@ public sealed class MainWindowViewModel :
                 SendCommand.NotifyCanExecuteChanged();
                 RunVerificationCommand.NotifyCanExecuteChanged();
                 ApplyProposedPatchCommand.NotifyCanExecuteChanged();
+                RollbackAppliedPatchCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(AgentEvidenceText));
             }
         }
@@ -325,8 +334,11 @@ public sealed class MainWindowViewModel :
             }
 
             OnPropertyChanged(nameof(AgentEvidenceText));
+            OnPropertyChanged(nameof(HasPatchRollback));
             SendCommand.NotifyCanExecuteChanged();
+            RollbackAppliedPatchCommand.NotifyCanExecuteChanged();
             IsVerificationApproved = false;
+            IsPatchRollbackApproved = false;
 
             if (!value)
             {
@@ -375,6 +387,12 @@ public sealed class MainWindowViewModel :
 
             OnPropertyChanged(nameof(HasProposedPatchPreview));
             OnPropertyChanged(nameof(PatchPreviewSummaryText));
+
+            if (value is not null)
+            {
+                ClearPatchRollbackRecord();
+            }
+
             IsPatchApplyApproved = false;
             DismissPatchPreviewCommand.NotifyCanExecuteChanged();
             ApplyProposedPatchCommand.NotifyCanExecuteChanged();
@@ -409,6 +427,39 @@ public sealed class MainWindowViewModel :
                     "One apply and its disclosed verification sequence are " +
                     "approved for this exact preview. Local-AI will require " +
                     "clean Git and revalidate the source before writing.";
+            }
+        }
+    }
+
+    public bool HasPatchRollback =>
+        _patchRollbackRecord is not null && IsAgentMode;
+
+    public string PatchRollbackSummaryText =>
+        _patchRollbackRecord is null
+            ? "No current-session rollback is available."
+            : $"Restore {_patchRollbackRecord.RelativePath} to its exact " +
+              $"pre-apply bytes • " +
+              $"{_patchRollbackRecord.OriginalSha256[..12]} -> " +
+              $"{_patchRollbackRecord.AppliedSha256[..12]}";
+
+    public bool IsPatchRollbackApproved
+    {
+        get => _isPatchRollbackApproved;
+        set
+        {
+            if (!SetField(ref _isPatchRollbackApproved, value))
+            {
+                return;
+            }
+
+            RollbackAppliedPatchCommand.NotifyCanExecuteChanged();
+
+            if (value)
+            {
+                StatusText =
+                    "One rollback is approved for the exact latest applied " +
+                    "file. Local-AI will revalidate the repository and " +
+                    "applied bytes before restoring anything.";
             }
         }
     }
@@ -522,6 +573,7 @@ public sealed class MainWindowViewModel :
             RunVerificationCommand.NotifyCanExecuteChanged();
             DismissPatchPreviewCommand.NotifyCanExecuteChanged();
             ApplyProposedPatchCommand.NotifyCanExecuteChanged();
+            RollbackAppliedPatchCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
             NewChatCommand.NotifyCanExecuteChanged();
         }
@@ -634,6 +686,7 @@ public sealed class MainWindowViewModel :
             ClearContextFiles();
             ClearVerificationHistory();
             ClearProposedPatchPreview();
+            ClearPatchRollbackRecord();
 
             foreach (RepositoryTreeNode rootEntry in
                      repository.RootEntries)
@@ -668,6 +721,7 @@ public sealed class MainWindowViewModel :
             ClearContextFiles();
             ClearVerificationHistory();
             ClearProposedPatchPreview();
+            ClearPatchRollbackRecord();
             OnPropertyChanged(nameof(AgentEvidenceText));
             UpdateVerificationReadiness();
 
@@ -1269,6 +1323,31 @@ public sealed class MainWindowViewModel :
         ProposedPatchPreview = null;
     }
 
+    private void SetPatchRollbackRecord(PatchRollbackRecord rollbackRecord)
+    {
+        ArgumentNullException.ThrowIfNull(rollbackRecord);
+
+        _patchRollbackRecord = rollbackRecord;
+        IsPatchRollbackApproved = false;
+        OnPropertyChanged(nameof(HasPatchRollback));
+        OnPropertyChanged(nameof(PatchRollbackSummaryText));
+        RollbackAppliedPatchCommand.NotifyCanExecuteChanged();
+    }
+
+    private void ClearPatchRollbackRecord()
+    {
+        if (_patchRollbackRecord is null && !IsPatchRollbackApproved)
+        {
+            return;
+        }
+
+        _patchRollbackRecord = null;
+        IsPatchRollbackApproved = false;
+        OnPropertyChanged(nameof(HasPatchRollback));
+        OnPropertyChanged(nameof(PatchRollbackSummaryText));
+        RollbackAppliedPatchCommand.NotifyCanExecuteChanged();
+    }
+
     private bool CanApplyProposedPatch()
     {
         return !IsBusy &&
@@ -1348,6 +1427,16 @@ public sealed class MainWindowViewModel :
             }
 
             patchApplied = true;
+
+            if (result.RollbackRecord is null)
+            {
+                ClearPatchRollbackRecord();
+            }
+            else
+            {
+                SetPatchRollbackRecord(result.RollbackRecord);
+            }
+
             ClearContextFiles();
 
             string verificationSummary =
@@ -1391,12 +1480,153 @@ public sealed class MainWindowViewModel :
         }
     }
 
+    private bool CanRollbackAppliedPatch()
+    {
+        return !IsBusy &&
+               IsAgentMode &&
+               IsPatchRollbackApproved &&
+               _repositoryIsGit &&
+               Directory.Exists(RepositoryPath) &&
+               _patchRollbackRecord is not null;
+    }
+
+    private async Task RollbackAppliedPatchAsync()
+    {
+        if (!CanRollbackAppliedPatch())
+        {
+            return;
+        }
+
+        PatchRollbackRecord rollbackRecord = _patchRollbackRecord!;
+        bool rollbackCompleted = false;
+
+        IsPatchRollbackApproved = false;
+        _requestCancellation?.Dispose();
+        _requestCancellation = new CancellationTokenSource();
+        IsBusy = true;
+        ElapsedText = "00:00.0";
+        StatusText = "Revalidating the approved current-session rollback...";
+        _stopwatch.Restart();
+        _elapsedTimer.Start();
+
+        try
+        {
+            PatchRollbackResult result =
+                await _repositoryPatchService.RollbackAsync(
+                    RepositoryPath,
+                    rollbackRecord,
+                    _requestCancellation.Token);
+
+            if (!result.IsSuccess)
+            {
+                StatusText = result.Error ??
+                    "The applied patch could not be rolled back safely.";
+                return;
+            }
+
+            rollbackCompleted = true;
+            ClearPatchRollbackRecord();
+            ClearContextFiles();
+
+            string verificationSummary =
+                await RunPostRollbackConfirmationAsync(
+                    _requestCancellation.Token);
+
+            Messages.Add(
+                new ChatMessageViewModel(
+                    isUser: false,
+                    $"Restored the exact pre-apply bytes for " +
+                    $"{result.RolledBackRelativePath}." +
+                    Environment.NewLine +
+                    verificationSummary));
+
+            StatusText = verificationSummary;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = rollbackCompleted
+                ? $"Rollback restored {rollbackRecord.RelativePath}, but " +
+                  "post-rollback confirmation was cancelled. The rollback " +
+                  "remains applied."
+                : "Approved rollback cancelled before any source write.";
+        }
+        catch (Exception exception)
+        {
+            StatusText = rollbackCompleted
+                ? $"Rollback restored {rollbackRecord.RelativePath}, but " +
+                  $"confirmation could not complete: {exception.Message}. " +
+                  "The rollback remains applied."
+                : $"Approved rollback failed safely: {exception.Message}";
+        }
+        finally
+        {
+            _stopwatch.Stop();
+            _elapsedTimer.Stop();
+            UpdateElapsedText();
+            IsBusy = false;
+            _requestCancellation?.Dispose();
+            _requestCancellation = null;
+        }
+    }
+
+    private async Task<string> RunPostRollbackConfirmationAsync(
+        CancellationToken cancellationToken)
+    {
+        VerificationRunResult diffCheck =
+            await RunProtectedVerificationStepAsync(
+                VerificationToolKind.GitDiffCheck,
+                "post-rollback",
+                cancellationToken);
+
+        if (diffCheck.WasCancelled)
+        {
+            return "Rollback restored the exact pre-apply bytes, but Git " +
+                   "diff check was cancelled. Final Git state was not " +
+                   "confirmed; the rollback remains applied.";
+        }
+
+        if (!diffCheck.IsSuccess)
+        {
+            return "Rollback restored the exact pre-apply bytes, but Git " +
+                   "diff check failed. Review the retained verification " +
+                   "output; the rollback remains applied.";
+        }
+
+        VerificationRunResult gitStatus =
+            await RunProtectedVerificationStepAsync(
+                VerificationToolKind.GitStatus,
+                "post-rollback",
+                cancellationToken);
+
+        if (gitStatus.WasCancelled)
+        {
+            return "Rollback restored the exact pre-apply bytes and Git " +
+                   "diff check passed, but Git status was cancelled. The " +
+                   "rollback remains applied.";
+        }
+
+        if (!gitStatus.IsSuccess)
+        {
+            return "Rollback restored the exact pre-apply bytes and Git " +
+                   "diff check passed, but Git status failed. Review the " +
+                   "retained evidence; the rollback remains applied.";
+        }
+
+        return IsCleanGitStatus(gitStatus.Output)
+            ? "Rollback restored the exact pre-apply bytes; Git diff " +
+              "check passed and Git status is clean."
+            : "Rollback restored the exact pre-apply bytes and Git diff " +
+              "check passed, but Git status is not clean. Review the " +
+              "retained evidence; the rollback remains applied.";
+    }
+
     private async Task<string> RunPostApplyVerificationAsync(
         CancellationToken cancellationToken)
     {
         VerificationRunResult diffCheck =
-            await RunPostApplyVerificationStepAsync(
+            await RunProtectedVerificationStepAsync(
                 VerificationToolKind.GitDiffCheck,
+                "post-apply",
                 cancellationToken);
 
         if (diffCheck.WasCancelled)
@@ -1421,8 +1651,9 @@ public sealed class MainWindowViewModel :
         }
 
         VerificationRunResult build =
-            await RunPostApplyVerificationStepAsync(
+            await RunProtectedVerificationStepAsync(
                 VerificationToolKind.DotnetBuild,
+                "post-apply",
                 cancellationToken);
 
         if (build.WasCancelled)
@@ -1440,8 +1671,9 @@ public sealed class MainWindowViewModel :
         }
 
         VerificationRunResult tests =
-            await RunPostApplyVerificationStepAsync(
+            await RunProtectedVerificationStepAsync(
                 VerificationToolKind.DotnetTest,
+                "post-apply",
                 cancellationToken);
 
         if (tests.WasCancelled)
@@ -1460,14 +1692,18 @@ public sealed class MainWindowViewModel :
     }
 
     private async Task<VerificationRunResult>
-        RunPostApplyVerificationStepAsync(
+        RunProtectedVerificationStepAsync(
             VerificationToolKind kind,
+            string operationLabel,
             CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationLabel);
+
         VerificationToolDescriptor tool = VerificationTools.Get(kind);
         DateTimeOffset startedAt = DateTimeOffset.Now;
         VerificationOutput = string.Empty;
-        VerificationStatusText = $"Running post-apply {tool.Name}...";
+        VerificationStatusText =
+            $"Running {operationLabel} {tool.Name}...";
         StatusText = VerificationStatusText;
         Progress<VerificationOutputLine> progress =
             new(AppendVerificationOutput);
@@ -1507,11 +1743,13 @@ public sealed class MainWindowViewModel :
         }
 
         RecordVerificationResult(tool, result);
+        string label = char.ToUpperInvariant(operationLabel[0]) +
+            operationLabel[1..];
         VerificationStatusText = result.WasCancelled
-            ? $"Post-apply {tool.Name} cancelled."
+            ? $"{label} {tool.Name} cancelled."
             : result.IsSuccess
-                ? $"Post-apply {tool.Name} passed."
-                : $"Post-apply {tool.Name} failed with exit code " +
+                ? $"{label} {tool.Name} passed."
+                : $"{label} {tool.Name} failed with exit code " +
                   $"{result.ExitCode}.";
         return result;
     }

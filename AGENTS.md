@@ -79,6 +79,11 @@ LocalAI.Core -> no Desktop or Infrastructure dependency
 - The apply approval may include only the disclosed fixed post-apply sequence:
   Git diff check and, when one solution is detected, isolated Release build and
   tests. Stop on failure or cancellation and never claim an unrun step passed.
+- Rollback is limited to the latest successfully applied single file in the
+  current application session. It requires a separate consumed approval and
+  may restore only the retained exact original bytes after the repository,
+  path, links, and exact applied bytes are revalidated. External edits must be
+  rejected without writing. Never use Git reset or checkout for rollback.
 - Never edit files in a repository selected through the LocalAI UI as part
   of repository inspection or context collection.
 - Never execute commands inside a user-selected repository through read-only
@@ -249,3 +254,4 @@ At completion, report:
 - any known limitation or pre-existing issue.
 
 Do not repeat completed setup or provide long generic explanations.
+
