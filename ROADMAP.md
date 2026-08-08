@@ -2,8 +2,8 @@
 
 **Status:** Active
 **Last updated:** 2026-08-08
-**Baseline:** `9758287` (`main`) — Sprint 2.3 current-session rollback,
-111 passing tests
+**Baseline:** `b5f40f7` (`main`) — Sprint 3.1 read-only project instruction
+manifest, 124 passing tests
 
 ## Purpose
 
@@ -47,7 +47,10 @@ sprint small, evidence-based, and safe.
 - Explicit, approval-gated current-session rollback that restores the exact
   pre-apply bytes of the latest applied single file, followed by protected
   Git diff and Git status confirmation.
-- 111 automated tests passing at the current baseline.
+- Read-only project instruction manifest for root `AGENTS.md` and one explicitly
+  selected `SKILL.md`, with visible precedence, budget, inclusion reasons, and
+  deterministic response-evidence validation.
+- 124 automated tests passing at the current baseline.
 
 ## Roadmap
 
@@ -192,7 +195,7 @@ restart, commit, push, model-directed tools, and unattended apply.
   feature work, test failure diagnosis, and release checks.
 - Let users review, edit, export, and delete all stored memory.
 
-**Sprint 3.1 — Read-only project instruction manifest — Active**
+**Sprint 3.1 — Read-only project instruction manifest — Complete (`b5f40f7`)**
 
 **User-visible goal:** Before Local-AI sends an agent prompt, show the local
 project instruction files that will be used, their precedence, size, estimated
@@ -315,13 +318,8 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** Sprint 3.1 — implementation in progress.
+**Status:** None.
 
-Implement only the read-only project instruction manifest described above.
-Discover root `AGENTS.md` and direct `skills/<name>/SKILL.md` files, include the
-valid root rules by default, allow one explicit skill selection, show exact
-provenance and exclusion reasons, enforce the 8 KB / approximately 2,000-token
-sub-budget, and preserve the approved prompt precedence. Do not add persistent
-memory, automatic skill selection, nested or other instruction formats,
-instruction editing, new tool permissions, repository writes, commits, pushes,
-network access, or unattended execution.
+Sprint 3.1 is complete at `b5f40f7` with 124 passing tests. No implementation
+sprint is currently active. Select and approve the next narrow sprint before
+changing source files.
