@@ -188,7 +188,7 @@ public sealed class MainWindowXamlTests
             .Where(element => element.Name.LocalName == "Button")
             .ToArray();
 
-        Assert.Equal("110", results.Attribute("MaxHeight")?.Value);
+        Assert.Equal("82", results.Attribute("MaxHeight")?.Value);
         Assert.Contains(
             "RepositorySearchResults",
             results.Attribute("ItemsSource")?.Value ?? string.Empty);
@@ -197,6 +197,42 @@ public sealed class MainWindowXamlTests
             button => (button.Attribute("Command")?.Value ?? string.Empty)
                 .Contains(
                     "AddSelectedSearchResultToContextCommand",
+                    StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ContentSearch_IsBoundedAndTargetsSelectedContextFile()
+    {
+        string xamlPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Fixtures",
+            "MainWindow.xaml");
+        XDocument document = XDocument.Load(xamlPath);
+
+        XElement panel = FindNamedElement(document, "ContentSearchPanel");
+        XElement results = FindNamedElement(document, "ContentSearchResults");
+        XElement query = panel.Descendants()
+            .Single(element => element.Name.LocalName == "TextBox");
+        XElement[] buttons = panel.Descendants()
+            .Where(element => element.Name.LocalName == "Button")
+            .ToArray();
+
+        Assert.Equal("100", query.Attribute("MaxLength")?.Value);
+        Assert.Equal("70", results.Attribute("MaxHeight")?.Value);
+        Assert.Equal(
+            "Disabled",
+            results.Attribute("ScrollViewer.HorizontalScrollBarVisibility")?.Value);
+        Assert.Equal(
+            "Stretch",
+            results.Attribute("HorizontalContentAlignment")?.Value);
+        Assert.Contains(
+            "ContentSearchMatches",
+            results.Attribute("ItemsSource")?.Value ?? string.Empty);
+        Assert.Contains(
+            buttons,
+            button => (button.Attribute("Command")?.Value ?? string.Empty)
+                .Contains(
+                    "SearchSelectedFileContentCommand",
                     StringComparison.Ordinal));
     }
 

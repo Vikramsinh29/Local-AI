@@ -45,6 +45,9 @@ public sealed class MainWindowViewModel :
     private RepositoryTreeItemViewModel? _selectedRepositoryItem;
     private RepositorySearchResultViewModel? _selectedRepositorySearchResult;
     private RepositoryContextFileViewModel? _selectedContextFile;
+    private string _contentSearchQuery = string.Empty;
+    private string _contentSearchStatus =
+        "Select a context file and enter at least 2 characters.";
     private IReadOnlyList<RepositoryTreeNode> _repositorySearchTree = [];
     private string _repositorySearchQuery = string.Empty;
     private string _repositorySearchStatus =
@@ -172,6 +175,15 @@ public sealed class MainWindowViewModel :
             RemoveSelectedContextFile,
             () => SelectedContextFile is not null && !IsBusy);
 
+        SearchSelectedFileContentCommand = new AsyncRelayCommand(
+            SearchSelectedFileContentAsync,
+            CanSearchSelectedFileContent);
+
+        ClearContentSearchCommand = new RelayCommand(
+            ClearContentSearch,
+            () => ContentSearchMatches.Count > 0 ||
+                  !string.IsNullOrEmpty(ContentSearchQuery));
+
         SendCommand = new AsyncRelayCommand(
             SendAsync,
             CanSend);
@@ -247,6 +259,9 @@ public sealed class MainWindowViewModel :
         get;
     } = [];
 
+    public ObservableCollection<RepositoryContentMatch>
+        ContentSearchMatches { get; } = [];
+
     public ObservableCollection<RepositorySearchResultViewModel>
         RepositorySearchResults { get; } = [];
 
@@ -286,6 +301,10 @@ public sealed class MainWindowViewModel :
     public AsyncRelayCommand AddSelectedSearchResultToContextCommand { get; }
 
     public RelayCommand RemoveSelectedContextFileCommand { get; }
+
+    public AsyncRelayCommand SearchSelectedFileContentCommand { get; }
+
+    public RelayCommand ClearContentSearchCommand { get; }
 
     public AsyncRelayCommand SendCommand { get; }
 
@@ -413,9 +432,30 @@ public sealed class MainWindowViewModel :
         {
             if (SetField(ref _selectedContextFile, value))
             {
+                ClearContentSearch();
                 RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
+                SearchSelectedFileContentCommand.NotifyCanExecuteChanged();
             }
         }
+    }
+
+    public string ContentSearchQuery
+    {
+        get => _contentSearchQuery;
+        set
+        {
+            if (SetField(ref _contentSearchQuery, value))
+            {
+                SearchSelectedFileContentCommand.NotifyCanExecuteChanged();
+                ClearContentSearchCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public string ContentSearchStatus
+    {
+        get => _contentSearchStatus;
+        private set => SetField(ref _contentSearchStatus, value);
     }
 
     public string RepositorySearchQuery
@@ -910,6 +950,8 @@ public sealed class MainWindowViewModel :
             SearchRepositoryCommand.NotifyCanExecuteChanged();
             AddSelectedSearchResultToContextCommand.NotifyCanExecuteChanged();
             RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
+            SearchSelectedFileContentCommand.NotifyCanExecuteChanged();
+            ClearContentSearchCommand.NotifyCanExecuteChanged();
             SendCommand.NotifyCanExecuteChanged();
             RunVerificationCommand.NotifyCanExecuteChanged();
             DismissPatchPreviewCommand.NotifyCanExecuteChanged();
@@ -1551,6 +1593,64 @@ public sealed class MainWindowViewModel :
         SelectedContextFile = ContextFiles.LastOrDefault();
         NotifyContextChanged();
         StatusText = $"Removed from context: {relativePath}";
+    }
+
+    private bool CanSearchSelectedFileContent()
+    {
+        int length = ContentSearchQuery.Trim().Length;
+        return !IsBusy &&
+               SelectedContextFile is not null &&
+               Directory.Exists(RepositoryPath) &&
+               length >= RepositoryContentSearch.MinimumQueryLength &&
+               length <= RepositoryContentSearch.MaximumQueryLength;
+    }
+
+    private async Task SearchSelectedFileContentAsync()
+    {
+        if (!CanSearchSelectedFileContent())
+        {
+            return;
+        }
+
+        RepositoryContextReadResult revalidated =
+            await _repositoryFileContextService.ReadAsync(
+                RepositoryPath,
+                SelectedContextFile!.RelativePath,
+                currentTotalBytes: 0);
+
+        ContentSearchMatches.Clear();
+        if (!revalidated.IsSuccess)
+        {
+            ContentSearchStatus = revalidated.Error ??
+                "The selected file could not be revalidated.";
+            return;
+        }
+
+        RepositoryContentSearchResponse response =
+            RepositoryContentSearch.Search(
+                revalidated.File!,
+                ContentSearchQuery);
+
+        foreach (RepositoryContentMatch match in response.Matches)
+        {
+            ContentSearchMatches.Add(match);
+        }
+
+        ContentSearchStatus = response.Matches.Count == 0
+            ? "No matching lines."
+            : response.IsTruncated
+                ? "Showing the first 20 matching lines."
+                : $"{response.Matches.Count} matching line(s).";
+        ClearContentSearchCommand.NotifyCanExecuteChanged();
+    }
+
+    private void ClearContentSearch()
+    {
+        ContentSearchQuery = string.Empty;
+        ContentSearchMatches.Clear();
+        ContentSearchStatus =
+            "Select a context file and enter at least 2 characters.";
+        ClearContentSearchCommand.NotifyCanExecuteChanged();
     }
 
     private void ClearContextFiles()

@@ -109,7 +109,7 @@
         <Grid x:Name="MainChatGrid"
               Grid.Column="1">
             <Grid.RowDefinitions>
-                <RowDefinition Height="64"/>
+                <RowDefinition Height="88"/>
                 <RowDefinition Height="2*"
                                MinHeight="160"/>
                 <RowDefinition Height="3*"
@@ -120,11 +120,11 @@
                     Background="White"
                     BorderBrush="#E5E5E5"
                     BorderThickness="0,0,0,1">
-                <Grid Margin="22,10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+                <Grid Margin="22,8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock FontSize="16"
@@ -138,38 +138,44 @@
                                    Text="{Binding ElapsedText}"/>
                     </StackPanel>
 
-                    <StackPanel Grid.Column="1"
-                                VerticalAlignment="Center"
-                                Orientation="Horizontal">
-                        <Button Height="34"
-                                MinWidth="130"
-                                Margin="0,0,10,0"
+                    <Grid Grid.Row="1"
+                          Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="96"/>
+                            <ColumnDefinition Width="72"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Button Height="32"
+                                Margin="0,0,8,0"
                                 Padding="12,5"
                                 Command="{Binding ToggleRepositoryPanelCommand}"
                                 Content="{Binding RepositoryName}"/>
 
-                        <ComboBox Width="210"
-                                  Height="34"
+                        <ComboBox Grid.Column="1"
+                                  MinWidth="80"
+                                  Height="32"
                                   VerticalContentAlignment="Center"
-                                  Margin="0,0,10,0"
+                                  Margin="0,0,8,0"
                                   ItemsSource="{Binding Models}"
                                   SelectedItem="{Binding SelectedModel}"
                                   IsEnabled="{Binding IsNotBusy}"/>
 
-                        <ComboBox Width="105"
-                                  Height="34"
+                        <ComboBox Grid.Column="2"
+                                  Height="32"
                                   VerticalContentAlignment="Center"
-                                  Margin="0,0,10,0"
+                                  Margin="0,0,8,0"
                                   DisplayMemberPath="Name"
                                   ItemsSource="{Binding AvailableGenerationProfiles}"
                                   SelectedItem="{Binding SelectedGenerationProfile}"
                                   IsEnabled="{Binding IsNotBusy}"/>
 
-                        <Button Width="76"
-                                Height="34"
+                        <Button Grid.Column="3"
+                                Height="32"
                                 Command="{Binding RefreshModelsCommand}"
                                 Content="Refresh"/>
-                    </StackPanel>
+                    </Grid>
                 </Grid>
             </Border>
 
@@ -930,7 +936,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="180"/>
+                    <RowDefinition Height="250"/>
                 </Grid.RowDefinitions>
 
                 <Grid Grid.Row="0"
@@ -1041,7 +1047,7 @@
                                    Text="{Binding RepositorySearchStatus}"/>
 
                         <ListBox x:Name="RepositorySearchResults"
-                                 MaxHeight="110"
+                                 MaxHeight="82"
                                  Margin="0,6,0,0"
                                  ItemsSource="{Binding RepositorySearchResults}"
                                  SelectedItem="{Binding SelectedRepositorySearchResult}">
@@ -1079,7 +1085,7 @@
 
                 <Border Grid.Row="4"
                         Margin="12"
-                        Padding="14"
+                        Padding="10"
                         Background="#F7F7F8"
                         CornerRadius="10">
                     <StackPanel>
@@ -1092,7 +1098,7 @@
                                    TextWrapping="Wrap"
                                    Text="{Binding SelectedRepositoryItem.RelativePath}"/>
 
-                        <Grid Margin="0,12,0,0">
+                        <Grid Margin="0,8,0,0">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
@@ -1112,27 +1118,27 @@
                                        Text="{Binding SelectedRepositoryItem.TypeText}"/>
 
                             <TextBlock Grid.Row="1"
-                                       Margin="0,7,0,0"
+                                       Margin="0,4,0,0"
                                        FontWeight="SemiBold"
                                        Text="Size:"/>
 
                             <TextBlock Grid.Row="1"
                                        Grid.Column="1"
-                                       Margin="12,7,0,0"
+                                       Margin="12,4,0,0"
                                        Text="{Binding SelectedRepositoryItem.SizeText}"/>
 
                             <TextBlock Grid.Row="2"
-                                       Margin="0,7,0,0"
+                                       Margin="0,4,0,0"
                                        FontWeight="SemiBold"
                                        Text="Modified:"/>
 
                             <TextBlock Grid.Row="2"
                                        Grid.Column="1"
-                                       Margin="12,7,0,0"
+                                       Margin="12,4,0,0"
                                        Text="{Binding SelectedRepositoryItem.ModifiedText}"/>
                         </Grid>
 
-                        <Button Margin="0,12,0,0"
+                        <Button Margin="0,8,0,0"
                                 Padding="12,7"
                                 Command="{Binding AddSelectedFileToContextCommand}"
                                 Content="Add file to AI context"/>
@@ -1147,8 +1153,10 @@
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="52"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
                         <TextBlock FontWeight="SemiBold"
@@ -1190,6 +1198,81 @@
                                     Padding="10,5"
                                     Command="{Binding RemoveSelectedContextFileCommand}"
                                     Content="Remove"/>
+                        </Grid>
+
+                        <Grid x:Name="ContentSearchPanel"
+                              Grid.Row="3"
+                              Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox Height="28"
+                                     Padding="7,4"
+                                     MaxLength="100"
+                                     ToolTip="Search within the selected safe context file"
+                                     Text="{Binding ContentSearchQuery,
+                                                    UpdateSourceTrigger=PropertyChanged}"/>
+
+                            <Button Grid.Column="1"
+                                    Margin="6,0,0,0"
+                                    Padding="9,4"
+                                    Command="{Binding SearchSelectedFileContentCommand}"
+                                    Content="Search"/>
+
+                            <Button Grid.Column="2"
+                                    Margin="6,0,0,0"
+                                    Padding="9,4"
+                                    Command="{Binding ClearContentSearchCommand}"
+                                    Content="Clear"/>
+                        </Grid>
+
+                        <Grid Grid.Row="4"
+                              Margin="0,5,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock FontSize="9"
+                                       Foreground="#666666"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding ContentSearchStatus}"/>
+
+                            <ListBox x:Name="ContentSearchResults"
+                                     Grid.Row="1"
+                                     MaxHeight="70"
+                                     Margin="0,5,0,0"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     HorizontalContentAlignment="Stretch"
+                                     ItemsSource="{Binding ContentSearchMatches}">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="HorizontalContentAlignment"
+                                                Value="Stretch"/>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,2">
+                                            <TextBlock FontSize="9"
+                                                       FontWeight="SemiBold"
+                                                       Text="{Binding LineNumber,
+                                                                      StringFormat=Line {0}}"/>
+                                            <TextBlock FontSize="10"
+                                                       Foreground="#555555"
+                                                       MaxHeight="30"
+                                                       TextWrapping="Wrap"
+                                                       ToolTip="{Binding Preview}"
+                                                       Text="{Binding Preview}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
                         </Grid>
                     </Grid>
                 </Border>

@@ -245,3 +245,16 @@ repository reload clears every result. Search never reads a file or sends data
 to Ollama. Only a separate explicit action passes one selected relative path to
 the existing repository file-context service, which revalidates containment,
 links, generated/binary/secret exclusions, UTF-8, and byte budgets.
+
+## Sprint 5.2 bounded single-file content-search boundary
+
+Desktop permits literal content search only after the user selects a file
+already accepted into context. Immediately before every search it re-reads that
+same relative path through `IRepositoryFileContextService`; a failed safety
+revalidation produces no results. Core performs deterministic case-insensitive
+line matching on the returned immutable content and emits at most 20 previews,
+each bounded to 240 source characters and labeled with its one-based line.
+
+Search results are display-only. They are cleared when the selected context
+file or repository state changes and cannot add context, alter a prompt, invoke
+Ollama, create an index, write the repository, or cross into another file.

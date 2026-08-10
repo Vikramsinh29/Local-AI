@@ -606,6 +606,28 @@ and final-diff review.
 watchers, persistent indexing, automatic relevance selection, prompt changes,
 model calls, repository writes, tools, commits, pushes, or unattended actions.
 
+**Sprint 5.2 — Bounded single-file content search — Active**
+
+**User-visible goal:** Search plain text within exactly one explicitly selected
+safe context file and show bounded matching previews with line numbers.
+
+**In scope:** case-insensitive literal matching, 2-to-100-character queries,
+at most 20 results, previews bounded to 240 source characters, and explicit
+Search and Clear actions.
+
+**Safety boundaries:** Re-read the selected file through the existing protected
+context service immediately before every search. Preserve containment, link,
+secret, binary, generated-file, UTF-8, and size checks. Never search another
+file, persist an index, change a prompt, call a model, or write a repository.
+
+**Acceptance criteria:** Tests cover query limits, case-insensitive line
+numbers, result and preview limits, explicit selected-file UI, Release rebuild
+with warnings as errors, all tests, `git diff --check`, and final-diff review.
+
+**Out of scope:** multi-file search, regex, fuzzy or semantic search,
+embeddings, indexing, automatic prompt inclusion, repository writes, model
+calls, commits, pushes, merges, pull requests, or unattended actions.
+
 ## Anti-Hallucination Operating Rules
 
 - Do not infer source code that has not been read.
@@ -630,8 +652,5 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** No implementation sprint is active. Sprint 5.1 is complete at
-`18741b6`.
-
-Define and approve one bounded Phase 5 sprint before creating another feature
-branch or changing implementation files.
+**Status:** Sprint 5.2 bounded single-file content search is active on
+`feature/bounded-single-file-content-search`, based on `c858a8f`.

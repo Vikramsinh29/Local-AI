@@ -222,3 +222,15 @@ may load one selected file.
 filesystem crawler, content-reading boundary, persistent index, semantic model,
 or hidden prompt-selection channel. The existing context service remains the
 single authority for deciding whether a selected file is safe to read.
+
+## ADR: content search is explicit and limited to one revalidated file
+
+**Decision:** Sprint 5.2 searches only literal text in the one context file the
+user explicitly selects. Desktop revalidates that file with the existing
+protected reader for each search. Core returns at most 20 line-numbered previews
+with fixed query and preview limits; results are display-only.
+
+**Reason:** Reusing the established read boundary avoids a second filesystem
+trust path. Single-file scope and fixed limits provide useful navigation while
+excluding indexing, implicit prompt selection, model calls, repository writes,
+and broad or semantic retrieval.
