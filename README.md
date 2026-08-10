@@ -97,6 +97,10 @@ previews and are never added to prompts automatically.
 
 **Sprint 5.2 status:** Complete at `d1869be`.
 
+Sprint 5.3 extends the same protected boundary with an explicit **Search all**
+action across 1–5 files already selected for context. Every file is revalidated
+before searching; output is limited to 10 matches per file and 50 total.
+
 Read [AGENTS.md](AGENTS.md) before making changes. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for dependency rules and
 [docs/DECISIONS.md](docs/DECISIONS.md) for settled decisions.

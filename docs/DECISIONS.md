@@ -234,3 +234,13 @@ with fixed query and preview limits; results are display-only.
 trust path. Single-file scope and fixed limits provide useful navigation while
 excluding indexing, implicit prompt selection, model calls, repository writes,
 and broad or semantic retrieval.
+
+## ADR: multi-file content search is limited to explicit context
+
+**Decision:** Sprint 5.3 searches at most five files already selected by the
+user for context. Every file is revalidated with cumulative size accounting.
+Literal results are capped at 10 per file and 50 total and remain display-only.
+
+**Reason:** Restricting scope to visible context selections adds useful
+cross-file navigation without introducing repository crawling, a persistent
+index, hidden relevance selection, model retrieval, or a new trust boundary.

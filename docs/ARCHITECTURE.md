@@ -258,3 +258,15 @@ each bounded to 240 source characters and labeled with its one-based line.
 Search results are display-only. They are cleared when the selected context
 file or repository state changes and cannot add context, alter a prompt, invoke
 Ollama, create an index, write the repository, or cross into another file.
+
+## Sprint 5.3 bounded multi-file content-search boundary
+
+Desktop searches multiple files only through an explicit action and only when
+1–5 files are already selected for context. It re-reads each relative path in
+deterministic order through `IRepositoryFileContextService`, carrying the
+cumulative byte count forward. Any failed revalidation stops the whole search
+and clears results.
+
+Core emits at most 10 literal matches per file and 50 total, ordered by path
+and line. Results are display-only and cannot discover another file, alter
+context or prompts, invoke a model or network, persist an index, or write.

@@ -179,6 +179,10 @@ public sealed class MainWindowViewModel :
             SearchSelectedFileContentAsync,
             CanSearchSelectedFileContent);
 
+        SearchAllContextFilesCommand = new AsyncRelayCommand(
+            SearchAllContextFilesAsync,
+            CanSearchAllContextFiles);
+
         ClearContentSearchCommand = new RelayCommand(
             ClearContentSearch,
             () => ContentSearchMatches.Count > 0 ||
@@ -259,7 +263,7 @@ public sealed class MainWindowViewModel :
         get;
     } = [];
 
-    public ObservableCollection<RepositoryContentMatch>
+    public ObservableCollection<RepositoryMultiFileContentMatch>
         ContentSearchMatches { get; } = [];
 
     public ObservableCollection<RepositorySearchResultViewModel>
@@ -303,6 +307,8 @@ public sealed class MainWindowViewModel :
     public RelayCommand RemoveSelectedContextFileCommand { get; }
 
     public AsyncRelayCommand SearchSelectedFileContentCommand { get; }
+
+    public AsyncRelayCommand SearchAllContextFilesCommand { get; }
 
     public RelayCommand ClearContentSearchCommand { get; }
 
@@ -435,6 +441,7 @@ public sealed class MainWindowViewModel :
                 ClearContentSearch();
                 RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
                 SearchSelectedFileContentCommand.NotifyCanExecuteChanged();
+                SearchAllContextFilesCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -447,6 +454,7 @@ public sealed class MainWindowViewModel :
             if (SetField(ref _contentSearchQuery, value))
             {
                 SearchSelectedFileContentCommand.NotifyCanExecuteChanged();
+                SearchAllContextFilesCommand.NotifyCanExecuteChanged();
                 ClearContentSearchCommand.NotifyCanExecuteChanged();
             }
         }
@@ -951,6 +959,7 @@ public sealed class MainWindowViewModel :
             AddSelectedSearchResultToContextCommand.NotifyCanExecuteChanged();
             RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
             SearchSelectedFileContentCommand.NotifyCanExecuteChanged();
+            SearchAllContextFilesCommand.NotifyCanExecuteChanged();
             ClearContentSearchCommand.NotifyCanExecuteChanged();
             SendCommand.NotifyCanExecuteChanged();
             RunVerificationCommand.NotifyCanExecuteChanged();
@@ -1633,7 +1642,10 @@ public sealed class MainWindowViewModel :
 
         foreach (RepositoryContentMatch match in response.Matches)
         {
-            ContentSearchMatches.Add(match);
+            ContentSearchMatches.Add(new(
+                revalidated.File!.RelativePath,
+                match.LineNumber,
+                match.Preview));
         }
 
         ContentSearchStatus = response.Matches.Count == 0
@@ -1641,6 +1653,63 @@ public sealed class MainWindowViewModel :
             : response.IsTruncated
                 ? "Showing the first 20 matching lines."
                 : $"{response.Matches.Count} matching line(s).";
+        ClearContentSearchCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanSearchAllContextFiles()
+    {
+        int length = ContentSearchQuery.Trim().Length;
+        return !IsBusy &&
+               Directory.Exists(RepositoryPath) &&
+               ContextFiles.Count is >= 1 and <=
+                   RepositoryMultiFileContentSearch.MaximumFiles &&
+               length >= RepositoryContentSearch.MinimumQueryLength &&
+               length <= RepositoryContentSearch.MaximumQueryLength;
+    }
+
+    private async Task SearchAllContextFilesAsync()
+    {
+        if (!CanSearchAllContextFiles())
+        {
+            return;
+        }
+
+        List<RepositoryContextFile> revalidatedFiles = [];
+        long totalBytes = 0;
+        foreach (RepositoryContextFileViewModel contextFile in ContextFiles
+                     .OrderBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(file => file.RelativePath, StringComparer.Ordinal))
+        {
+            RepositoryContextReadResult result =
+                await _repositoryFileContextService.ReadAsync(
+                    RepositoryPath,
+                    contextFile.RelativePath,
+                    totalBytes);
+            if (!result.IsSuccess)
+            {
+                ContentSearchMatches.Clear();
+                ContentSearchStatus = result.Error ??
+                    $"Could not revalidate {contextFile.RelativePath}.";
+                return;
+            }
+            revalidatedFiles.Add(result.File!);
+            totalBytes += result.File!.SizeBytes;
+        }
+
+        RepositoryMultiFileContentSearchResponse response =
+            RepositoryMultiFileContentSearch.Search(
+                revalidatedFiles,
+                ContentSearchQuery);
+        ContentSearchMatches.Clear();
+        foreach (RepositoryMultiFileContentMatch match in response.Matches)
+        {
+            ContentSearchMatches.Add(match);
+        }
+        ContentSearchStatus = response.Matches.Count == 0
+            ? "No matching lines in the selected context files."
+            : response.IsTruncated
+                ? $"Showing the first {response.Matches.Count} bounded matches."
+                : $"{response.Matches.Count} matching line(s) across context files.";
         ClearContentSearchCommand.NotifyCanExecuteChanged();
     }
 

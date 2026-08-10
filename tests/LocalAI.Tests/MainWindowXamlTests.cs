@@ -234,6 +234,12 @@ public sealed class MainWindowXamlTests
                 .Contains(
                     "SearchSelectedFileContentCommand",
                     StringComparison.Ordinal));
+        Assert.Contains(
+            buttons,
+            button => (button.Attribute("Command")?.Value ?? string.Empty)
+                .Contains(
+                    "SearchAllContextFilesCommand",
+                    StringComparison.Ordinal));
     }
 
     private static XElement FindNamedElement(

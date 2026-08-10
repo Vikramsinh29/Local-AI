@@ -1207,6 +1207,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
                             <TextBox Height="28"
@@ -1223,6 +1224,13 @@
                                     Content="Search"/>
 
                             <Button Grid.Column="2"
+                                    Margin="6,0,0,0"
+                                    Padding="9,4"
+                                    ToolTip="Search all explicitly selected context files"
+                                    Command="{Binding SearchAllContextFilesCommand}"
+                                    Content="Search all"/>
+
+                            <Button Grid.Column="3"
                                     Margin="6,0,0,0"
                                     Padding="9,4"
                                     Command="{Binding ClearContentSearchCommand}"
@@ -1259,6 +1267,11 @@
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <StackPanel Margin="0,2">
+                                            <TextBlock FontSize="9"
+                                                       Foreground="#666666"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding RelativePath}"
+                                                       Text="{Binding RelativePath}"/>
                                             <TextBlock FontSize="9"
                                                        FontWeight="SemiBold"
                                                        Text="{Binding LineNumber,
