@@ -628,7 +628,7 @@ with warnings as errors, all tests, `git diff --check`, and final-diff review.
 embeddings, indexing, automatic prompt inclusion, repository writes, model
 calls, commits, pushes, merges, pull requests, or unattended actions.
 
-**Sprint 5.3 — Bounded multi-file content search — Active**
+**Sprint 5.3 — Bounded multi-file content search — Complete (`b07a329`)**
 
 **User-visible goal:** Explicitly search literal text across the safe files
 already selected for prompt context, with paths, line numbers, and previews.
@@ -671,5 +671,8 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** Sprint 5.3 bounded multi-file content search is active on
-`feature/bounded-multi-file-content-search`, based on `77ca5e`.
+**Status:** No implementation sprint is active. Sprint 5.3 is complete at
+`b07a329`.
+
+Define and approve one bounded Phase 5 sprint before creating another feature
+branch or changing implementation files.
