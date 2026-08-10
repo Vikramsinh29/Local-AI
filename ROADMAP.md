@@ -2,8 +2,8 @@
 
 **Status:** Active
 **Last updated:** 2026-08-10
-**Baseline:** `c0bb8fb` (`main`) — Sprint 3.3 explicit project-memory
-prompt inclusion, 158 passing tests
+**Baseline:** `706d392` (`main`) — Sprint 4.1 deterministic local evaluation
+suite, 176 passing tests and 5 passing offline evaluation cases
 
 ## Purpose
 
@@ -56,7 +56,10 @@ sprint small, evidence-based, and safe.
 - Explicit, session-only inclusion of at most one user-selected project-memory
   entry, with default exclusion, full-entry revalidation, visible token cost,
   approved prompt precedence, and deterministic evidence validation.
-- 158 automated tests passing at the current baseline.
+- Deterministic offline evaluation suite with versioned synthetic cases,
+  reproducible scoring, bounded JSON/Markdown reports, and explicit provenance.
+- 176 automated tests and 5 offline evaluation cases passing at the current
+  baseline.
 
 ## Roadmap
 
@@ -417,7 +420,7 @@ or unattended actions.
 - Promote a model/profile only when it improves measured results without
   regressing safety or latency beyond agreed limits.
 
-**Sprint 4.1 — Deterministic local evaluation suite foundation — Active**
+**Sprint 4.1 — Deterministic local evaluation suite foundation — Complete (`706d392`)**
 
 **User-visible goal:** Run the same bounded, offline evaluation cases against
 recorded Local-AI outputs and receive an honest, reproducible report showing
@@ -520,12 +523,4 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** Sprint 4.1 — roadmap active; implementation approved but not
-started.
-
-Implement only the deterministic local evaluation-suite foundation described
-above. Use versioned synthetic cases, recorded candidate outputs, existing
-deterministic validators, bounded ignored local reports, and explicit scoring
-provenance. Do not add live model inference, LLM judging, model comparison,
-automatic promotion, dashboards, telemetry, network access, new tool powers,
-repository writes, memory mutation, commits, pushes, or unattended execution.
+**Status:** None.
