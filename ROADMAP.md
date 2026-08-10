@@ -485,6 +485,89 @@ model promotion, subjective LLM judging, semantic similarity, embeddings,
 performance benchmarking, UI dashboards, cloud telemetry, network access,
 repository writes, patch apply, memory changes, commits, pushes, or unattended
 execution.
+
+**Sprint 4.2 — Deterministic candidate comparison — Active**
+
+**User-visible goal:** Compare two completed offline evaluation reports from
+the same fixture set and display an honest, deterministic recommendation that
+shows quality, safety, and reported-duration changes without running a model or
+changing Local-AI settings.
+
+**In scope:**
+
+- Load exactly two valid Sprint 4.1 evaluation reports: one baseline and one
+  candidate.
+- Require matching evaluator schema, product commit, fixture-set identity, and
+  case identifiers so the comparison isolates only the declared candidate
+  model or generation profile.
+- Compare case-by-case outcomes and aggregate plan correctness, evidence
+  grounding, file-selection precision, patch validity, and unsafe-action
+  rejection metrics.
+- Show absolute metric changes, regressions, improvements, and reported run
+  duration with an explicit percentage delta when the baseline duration is
+  non-zero.
+- Treat any unsafe-action regression, missing or extra case, invalid case,
+  skipped case, unscored result, or mismatched provenance as not recommended.
+- Mark a candidate as eligible for user review only when it improves at least
+  one quality metric, regresses none, preserves all safety results, and its
+  reported duration is no more than 20 percent above the baseline.
+- Keep the recommendation advisory and require the user to decide whether any
+  model or profile change should be made later.
+- Write bounded JSON and Markdown comparison reports under ignored
+  `.local-ai/evaluations/comparisons/<comparison-id>/` state.
+- Preserve baseline and candidate report hashes, run identifiers, commits,
+  model and profile labels, evaluator schema, case-set identity, comparison
+  schema, and every deterministic gate result.
+- Reject malformed, duplicate, unsupported-schema, linked, outside-root,
+  oversized, incomplete, or ambiguous report inputs honestly.
+
+**Expected implementation scope:**
+
+- Core comparison request, result, metric-delta, gate, and recommendation
+  models with one deterministic comparison service.
+- A bounded local report loader and comparison report writer that reuse the
+  Sprint 4.1 containment and provenance rules.
+- One fixed offline command-line entry point under `tools/`; no desktop
+  dashboard is required in this sprint.
+- A small pair of synthetic baseline/candidate reports and focused comparison
+  tests.
+- Relevant README, architecture, decision, evaluation, and roadmap updates.
+
+**Safety boundaries:**
+
+- Comparison is offline and read-only with respect to selected repositories.
+- Evaluation reports are untrusted data and cannot become instructions, tool
+  calls, approvals, patches, memory mutations, model settings, or promotions.
+- Never run Ollama, execute candidate output, benchmark hardware, contact a
+  network service, or alter the selected model or generation profile.
+- Never compare mismatched or incomplete reports, silently repair provenance,
+  invent a missing score, or hide a regression behind an aggregate result.
+- Never promote automatically; the strongest result is only `Eligible for user
+  review`.
+
+**Acceptance criteria:**
+
+- The same two reports produce byte-stable comparison data apart from declared
+  comparison metadata such as timestamp and comparison identifier.
+- Tests cover matching reports, every metric delta, deterministic ordering,
+  duplicate and missing cases, schema and product-commit mismatch, invalid or
+  skipped results, unsafe-action regression, quality regression, zero-duration
+  handling, and the 20 percent duration limit.
+- Tests reject malformed, linked, outside-root, oversized, duplicate, and
+  ambiguous report inputs without producing a recommendation.
+- A manual offline comparison must produce bounded JSON and Markdown reports,
+  show complete provenance and gate evidence, and leave source files and Git
+  status unchanged.
+- Release build, all existing and new tests, the Sprint 4.1 offline evaluation,
+  `git diff --check`, and final-diff review must pass.
+
+**Out of scope:** live Ollama inference, candidate-output capture, subjective
+LLM judging, semantic similarity, embeddings, hardware benchmarking, desktop
+dashboards, comparison of more than two candidates, automatic promotion,
+model downloads, Modelfile changes, generation-profile changes, telemetry,
+network access, repository writes, patch apply, memory changes, commits,
+pushes, or unattended execution.
+
 **Phase 4 exit gate**
 
 - Every future upgrade has a before/after evaluation report.
@@ -523,4 +606,13 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** None.
+**Status:** Sprint 4.2 — roadmap active; implementation approved but not
+started.
+
+Implement only the deterministic two-report candidate comparison described
+above. Compare recorded reports from the same evaluator, product commit, and
+case set; calculate explicit quality, safety, and reported-duration deltas; and
+emit a bounded local recommendation for user review. Do not run Ollama, judge
+with an LLM, benchmark hardware, compare more than two candidates, alter model
+or profile settings, promote automatically, access the network, write selected
+repositories, or execute unattended actions.
