@@ -2,8 +2,8 @@
 
 **Status:** Active
 **Last updated:** 2026-08-10
-**Baseline:** `706d392` (`main`) — Sprint 4.1 deterministic local evaluation
-suite, 176 passing tests and 5 passing offline evaluation cases
+**Baseline:** `2ce02a0` (`main`) — Sprint 4.2 deterministic candidate
+comparison, 199 passing tests and 5 passing offline evaluation cases
 
 ## Purpose
 
@@ -58,7 +58,7 @@ sprint small, evidence-based, and safe.
   approved prompt precedence, and deterministic evidence validation.
 - Deterministic offline evaluation suite with versioned synthetic cases,
   reproducible scoring, bounded JSON/Markdown reports, and explicit provenance.
-- 176 automated tests and 5 offline evaluation cases passing at the current
+- 199 automated tests and 5 offline evaluation cases passing at the current
   baseline.
 
 ## Roadmap
@@ -486,7 +486,7 @@ performance benchmarking, UI dashboards, cloud telemetry, network access,
 repository writes, patch apply, memory changes, commits, pushes, or unattended
 execution.
 
-**Sprint 4.2 — Deterministic candidate comparison — Active**
+**Sprint 4.2 — Deterministic candidate comparison — Complete (`2ce02a0`)**
 
 **User-visible goal:** Compare two completed offline evaluation reports from
 the same fixture set and display an honest, deterministic recommendation that
@@ -568,7 +568,7 @@ model downloads, Modelfile changes, generation-profile changes, telemetry,
 network access, repository writes, patch apply, memory changes, commits,
 pushes, or unattended execution.
 
-**Phase 4 exit gate**
+**Phase 4 exit gate — Satisfied (`2ce02a0`)**
 
 - Every future upgrade has a before/after evaluation report.
 - “Better” means measurable improvement, not a subjective model claim.
@@ -606,13 +606,8 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** Sprint 4.2 — implementation in progress on
-`feature/deterministic-candidate-comparison`.
+**Status:** No implementation sprint is active. Sprint 4.2 and Phase 4 are
+complete at `2ce02a0`.
 
-Implement only the deterministic two-report candidate comparison described
-above. Compare recorded reports from the same evaluator, product commit, and
-case set; calculate explicit quality, safety, and reported-duration deltas; and
-emit a bounded local recommendation for user review. Do not run Ollama, judge
-with an LLM, benchmark hardware, compare more than two candidates, alter model
-or profile settings, promote automatically, access the network, write selected
-repositories, or execute unattended actions.
+Phase 5 remains optional. Define and approve one bounded Phase 5 sprint before
+creating a feature branch or changing implementation files.
