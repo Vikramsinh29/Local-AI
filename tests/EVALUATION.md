@@ -167,3 +167,34 @@ status is unchanged by the evaluation run. A failing case is an honest evaluated
 result. An invalid fixture or unsafe report path is an infrastructure failure.
 Generated reports must remain under `.local-ai/evaluations` and must never be
 added as prompt evidence or committed.
+
+## Sprint 4.2 deterministic candidate comparison
+
+Use the fixed comparison command with exactly one baseline and one candidate
+report below `.local-ai/evaluations`:
+
+```powershell
+dotnet run --project tools/LocalAI.Evaluation/LocalAI.Evaluation.csproj -c Release --no-build --no-restore -- compare --evaluation-root .local-ai/evaluations --comparison-id <comparison-id> --baseline-report <baseline-json> --candidate-report <candidate-json>
+```
+
+The manual gate copies the versioned synthetic reports from
+`evaluations/comparison-fixtures/v1` into ignored evaluation state, runs the
+command offline, and verifies:
+
+1. both SHA-256 hashes, run IDs, labels, product commits, evaluator schemas,
+   and the matching case-set identity are present;
+2. all five metrics have ordered baseline, candidate, absolute-delta, and
+   direction values;
+3. all stable case identifiers and every deterministic eligibility gate are
+   reported;
+4. the synthetic plan-correctness improvement, preserved safety, and 10-percent
+   duration increase produce only `Eligible for user review`;
+5. JSON and Markdown output stay bounded below the comparison ID; and
+6. source and Git status are unchanged by evaluation and comparison.
+
+Automated tests must also cover quality and unsafe-action regressions, missing
+cases, evaluator and product provenance mismatches, duplicate, malformed,
+linked, outside-root and oversized reports, inconsistent scores, zero baseline
+duration, the exact 20-percent boundary, bounded output, and existing-output
+rejection. A comparison recommendation is never a model promotion or setting
+change.

@@ -24,7 +24,7 @@ ViewModels depend on Core interfaces, never concrete Infrastructure services.
 | Area | Location | Responsibility |
 |---|---|---|
 | Contracts and models | `src/LocalAI.Core` | Interfaces, immutable models, shared rules |
-| External services | `src/LocalAI.Infrastructure` | Ollama HTTP, read-only repository/context and instruction-manifest access, bounded LocalAppData project-memory persistence, fixed verification execution, and the approval-gated patch write boundary |
+| External services | `src/LocalAI.Infrastructure` | Ollama HTTP, read-only repository/context and instruction-manifest access, bounded LocalAppData project-memory persistence, fixed verification execution, approval-gated patch writes, and bounded local evaluation report I/O |
 | UI coordination | `src/LocalAI.Desktop/ViewModels` | Observable state, one-run approval, commands, cancellation, status, and session audit |
 | UI presentation | `src/LocalAI.Desktop` | XAML bindings and view-specific code-behind only |
 | Tests | `tests/LocalAI.Tests` | Deterministic unit and service behavior tests |
@@ -208,3 +208,27 @@ per-case findings, safety labels, and aggregate scores.
 
 Fixture failures are domain results and remain reportable. Loader, containment,
 schema, and output failures are infrastructure failures and stop the command.
+
+## Sprint 4.2 deterministic comparison boundary
+
+Candidate comparison remains outside the interactive Desktop agent. The local
+report loader accepts exactly the two explicitly named JSON reports below the
+fixed `.local-ai/evaluations` root. It rejects unsupported evaluator or report
+schemas, malformed or oversized data, duplicate or incomplete cases and
+metrics, escaping paths, and linked path components before any recommendation
+is calculated.
+
+Core compares stable case identifiers and the five Sprint 4.1 metric summaries
+only after evaluator schema, product commit, and fixture-set identity match. It
+records absolute metric deltas, deterministic directions, safety preservation,
+and reported-duration change. Eligibility requires one quality improvement, no
+quality regression, preserved unsafe-action rejection, and no more than a 20
+percent reported-duration increase. Every gate remains visible even when one
+fails.
+
+The comparison writer emits one bounded JSON report and one bounded Markdown
+report under `.local-ai/evaluations/comparisons/<comparison-id>`. Input hashes,
+run IDs, labels, commits, schemas, and case-set identity are retained. The
+console command has no Ollama, network, repository writer, settings writer,
+project-memory writer, Git publication, or candidate-output execution path.
+`Eligible for user review` is advisory and cannot change a model or profile.

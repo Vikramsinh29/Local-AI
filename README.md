@@ -36,10 +36,14 @@ an external AI service.
 - Explicit session-only inclusion of at most one selected memory entry, with
   default exclusion, visible category/title/byte/token provenance, immediate
   pre-send revalidation, and deterministic response-evidence validation.
+- A deterministic offline comparison of exactly two compatible evaluation
+  reports, with case and metric deltas, explicit provenance and safety gates,
+  a 20-percent reported-duration limit, and an advisory-only recommendation.
 
 The current roadmap is in [ROADMAP.md](ROADMAP.md). The active scope is Phase
-3, Sprint 3.3: explicit, revalidated inclusion of one user-selected project
-memory entry while the default remains no memory.
+4, Sprint 4.2: deterministic candidate comparison for two compatible recorded
+evaluation reports. The comparison never runs a model or changes the selected
+model or generation profile.
 Local-AI does not provide an arbitrary terminal and must not restore packages,
 commit, push, or apply model output that was not separately reviewed and
 approved.
@@ -57,6 +61,24 @@ approved.
 dotnet build LocalAI.slnx -c Release
 dotnet test LocalAI.slnx -c Release --no-build
 ```
+
+## Windows PowerShell package reliability
+
+Repository automation ZIPs must be validated with Windows PowerShell 5.1
+before they are shared. Parse every packaged `.ps1` file and reject any parser
+error. In expandable strings, delimit a variable followed by a colon, for
+example `"${Description}:"`, rather than `"$Description:"`. With
+`$ErrorActionPreference = "Stop"`, avoid native commands that intentionally
+return a non-zero exit code or write expected errors; use success-returning
+queries such as `git ls-tree` for existence checks. Every corrected ZIP must
+have a new filename and published SHA-256, and a wrapper may print success only
+after the child process has returned exit code zero.
+
+If a package adds or changes a project, solution, package reference, target, or
+build input, it must run and validate an explicit `dotnet restore` before any
+build or test command that uses `--no-restore`. A recovery run after an
+interrupted payload copy must repeat that restore gate; it must not assume an
+existing `obj/project.assets.json` belongs to the current project graph.
 
 ## Repository map
 
@@ -88,3 +110,18 @@ a valid score. Malformed fixtures, unsafe paths, unsupported schemas, duplicate
 IDs, and report-write failures are infrastructure errors and return a non-zero
 exit code. Evaluation never applies patches, invokes model-selected tools,
 writes project memory, commits, or pushes.
+
+Compare one baseline report with one declared candidate by using the same fixed
+local evaluation root:
+
+```powershell
+dotnet run --project tools/LocalAI.Evaluation/LocalAI.Evaluation.csproj -c Release --no-build --no-restore -- compare --evaluation-root .local-ai/evaluations --comparison-id <comparison-id> --baseline-report <baseline-json> --candidate-report <candidate-json>
+```
+
+Both inputs must use the supported evaluator schema and match on product
+commit, fixture-set identity, and case identifiers. The candidate is eligible
+for user review only when at least one quality metric improves, none regresses,
+unsafe-action rejection is preserved, and reported duration is no more than 20
+percent above the baseline. The result is advisory; comparison does not select
+or promote a model. Bounded JSON and Markdown reports are written under
+`.local-ai/evaluations/comparisons/<comparison-id>`.

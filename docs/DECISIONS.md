@@ -190,3 +190,23 @@ rejects malformed, duplicate, unsupported, linked, outside-root, oversized, or
 ambiguous fixtures. Reports are local generated state under `.local-ai` and are
 not source inputs. Expanding to live-model evaluation, statistical sampling, a
 dashboard, or LLM judging requires a later explicit decision.
+
+## ADR: candidate comparison is deterministic and advisory
+
+**Decision:** Compare exactly one baseline and one candidate Sprint 4.1 report
+only when their supported evaluator schema, product commit, fixture-set
+identity, and case identifiers match. Preserve both report hashes and complete
+provenance. Calculate fixed case, metric, safety, and reported-duration gates,
+then emit only `Eligible for user review` or `Not recommended`.
+
+**Reason:** A candidate comparison is meaningful only when the declared model
+or profile is the isolated variable. Fail-closed provenance and per-gate output
+prevent missing cases, invalid scores, safety failures, or an aggregate average
+from hiding a regression. The 20-percent duration threshold is deterministic
+reported-run evidence, not a hardware benchmark.
+
+**Consequences:** Comparison remains offline, local, bounded, and repeatable.
+It never runs Ollama, judges with an LLM, executes recorded output, changes a
+model/profile, promotes automatically, or writes a selected repository. Any
+quality regression, unsafe-action regression, provenance mismatch, invalid
+input, or excessive duration makes the candidate not recommended.

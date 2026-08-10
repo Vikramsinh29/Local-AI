@@ -606,8 +606,8 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** Sprint 4.2 — roadmap active; implementation approved but not
-started.
+**Status:** Sprint 4.2 — implementation in progress on
+`feature/deterministic-candidate-comparison`.
 
 Implement only the deterministic two-report candidate comparison described
 above. Compare recorded reports from the same evaluator, product commit, and
