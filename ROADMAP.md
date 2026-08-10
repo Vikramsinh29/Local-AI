@@ -606,7 +606,7 @@ and final-diff review.
 watchers, persistent indexing, automatic relevance selection, prompt changes,
 model calls, repository writes, tools, commits, pushes, or unattended actions.
 
-**Sprint 5.2 — Bounded single-file content search — Active**
+**Sprint 5.2 — Bounded single-file content search — Complete (`d1869be`)**
 
 **User-visible goal:** Search plain text within exactly one explicitly selected
 safe context file and show bounded matching previews with line numbers.
@@ -652,5 +652,8 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** Sprint 5.2 bounded single-file content search is active on
-`feature/bounded-single-file-content-search`, based on `c858a8f`.
+**Status:** No implementation sprint is active. Sprint 5.2 is complete at
+`d1869be`.
+
+Define and approve one bounded Phase 5 sprint before creating another feature
+branch or changing implementation files.

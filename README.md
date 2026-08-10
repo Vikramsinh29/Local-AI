@@ -95,6 +95,8 @@ context file. The file is revalidated through the existing protected context
 reader immediately before each search; results are limited to 20 line-numbered
 previews and are never added to prompts automatically.
 
+**Sprint 5.2 status:** Complete at `d1869be`.
+
 Read [AGENTS.md](AGENTS.md) before making changes. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for dependency rules and
 [docs/DECISIONS.md](docs/DECISIONS.md) for settled decisions.
