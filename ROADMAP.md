@@ -2,8 +2,8 @@
 
 **Status:** Active
 **Last updated:** 2026-08-10
-**Baseline:** `2ce02a0` (`main`) — Sprint 4.2 deterministic candidate
-comparison, 199 passing tests and 5 passing offline evaluation cases
+**Baseline:** `18741b6` (`main`) — Sprint 5.1 bounded repository tree search,
+204 passing automated tests and 5 passing offline evaluation cases
 
 ## Purpose
 
@@ -58,7 +58,7 @@ sprint small, evidence-based, and safe.
   approved prompt precedence, and deterministic evidence validation.
 - Deterministic offline evaluation suite with versioned synthetic cases,
   reproducible scoring, bounded JSON/Markdown reports, and explicit provenance.
-- 199 automated tests and 5 offline evaluation cases passing at the current
+- 204 automated tests and 5 offline evaluation cases passing at the current
   baseline.
 
 ## Roadmap
@@ -582,7 +582,7 @@ Only begin after Phases 1–4 are stable.
 - Local documentation retrieval.
 - Optional self-hosted model upgrades and custom Ollama Modelfiles.
 
-**Sprint 5.1 — Bounded repository tree search — Active**
+**Sprint 5.1 — Bounded repository tree search — Complete (`18741b6`)**
 
 **User-visible goal:** Search already-inspected repository file names and
 relative paths, then explicitly choose a result for the existing protected
@@ -630,9 +630,8 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** Sprint 5.1 — implementation in progress on
-`feature/bounded-repository-search`.
+**Status:** No implementation sprint is active. Sprint 5.1 is complete at
+`18741b6`.
 
-Implement only bounded search across the already-inspected repository tree.
-Results remain read-only candidates until the user explicitly invokes the
-existing protected file-context reader.
+Define and approve one bounded Phase 5 sprint before creating another feature
+branch or changing implementation files.

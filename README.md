@@ -43,10 +43,10 @@ an external AI service.
   and relative paths, with explicit selection before the existing protected
   context reader can add a result to an AI prompt.
 
-The current roadmap is in [ROADMAP.md](ROADMAP.md). Phase 4 is complete at
-`2ce02a0`: deterministic candidate comparison for two compatible recorded
-evaluation reports. The active scope is Sprint 5.1: bounded, read-only search
-over the already-inspected repository tree.
+The current roadmap is in [ROADMAP.md](ROADMAP.md). Sprint 5.1 is complete at
+`18741b6`: bounded, read-only search over the already-inspected repository tree.
+No implementation sprint is currently active; further optional Phase 5 work
+requires a separately defined and approved scope.
 Local-AI does not provide an arbitrary terminal and must not restore packages,
 commit, push, or apply model output that was not separately reviewed and
 approved.
