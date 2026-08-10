@@ -40,10 +40,10 @@ an external AI service.
   reports, with case and metric deltas, explicit provenance and safety gates,
   a 20-percent reported-duration limit, and an advisory-only recommendation.
 
-The current roadmap is in [ROADMAP.md](ROADMAP.md). The active scope is Phase
-4, Sprint 4.2: deterministic candidate comparison for two compatible recorded
-evaluation reports. The comparison never runs a model or changes the selected
-model or generation profile.
+The current roadmap is in [ROADMAP.md](ROADMAP.md). Phase 4 is complete at
+`2ce02a0`: deterministic candidate comparison for two compatible recorded
+evaluation reports. No implementation sprint is currently active; any optional
+Phase 5 work requires a separately defined and approved scope.
 Local-AI does not provide an arbitrary terminal and must not restore packages,
 commit, push, or apply model output that was not separately reviewed and
 approved.
