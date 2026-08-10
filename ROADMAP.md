@@ -582,6 +582,30 @@ Only begin after Phases 1–4 are stable.
 - Local documentation retrieval.
 - Optional self-hosted model upgrades and custom Ollama Modelfiles.
 
+**Sprint 5.1 — Bounded repository tree search — Active**
+
+**User-visible goal:** Search already-inspected repository file names and
+relative paths, then explicitly choose a result for the existing protected
+file-context reader.
+
+**In scope:** case-insensitive deterministic name/path matching, fixed ranking,
+a 2-to-100-character query, at most 50 displayed file results, clear status,
+and explicit add-to-context action through the existing safety boundary.
+
+**Safety boundaries:** Search only the bounded in-memory tree produced by
+repository inspection. Never read file contents, create a persistent index,
+follow links, access excluded directories, call Ollama or a network service,
+automatically add context, execute a result, or write the selected repository.
+
+**Acceptance criteria:** Test ranking, deterministic ordering, file-only
+results, query limits, result truncation, repository-change clearing, explicit
+context selection, bounded layout, Release build, all tests, `git diff --check`,
+and final-diff review.
+
+**Out of scope:** content search, regex, fuzzy or semantic search, embeddings,
+watchers, persistent indexing, automatic relevance selection, prompt changes,
+model calls, repository writes, tools, commits, pushes, or unattended actions.
+
 ## Anti-Hallucination Operating Rules
 
 - Do not infer source code that has not been read.
@@ -606,8 +630,9 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** No implementation sprint is active. Sprint 4.2 and Phase 4 are
-complete at `2ce02a0`.
+**Status:** Sprint 5.1 — implementation in progress on
+`feature/bounded-repository-search`.
 
-Phase 5 remains optional. Define and approve one bounded Phase 5 sprint before
-creating a feature branch or changing implementation files.
+Implement only bounded search across the already-inspected repository tree.
+Results remain read-only candidates until the user explicitly invokes the
+existing protected file-context reader.

@@ -173,6 +173,33 @@ public sealed class MainWindowXamlTests
         Assert.Equal("Right", closeButton.Attribute("HorizontalAlignment")?.Value);
     }
 
+    [Fact]
+    public void RepositorySearch_IsBoundedAndRequiresExplicitContextAction()
+    {
+        string xamlPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Fixtures",
+            "MainWindow.xaml");
+        XDocument document = XDocument.Load(xamlPath);
+
+        XElement panel = FindNamedElement(document, "RepositorySearchPanel");
+        XElement results = FindNamedElement(document, "RepositorySearchResults");
+        XElement[] buttons = panel.Descendants()
+            .Where(element => element.Name.LocalName == "Button")
+            .ToArray();
+
+        Assert.Equal("110", results.Attribute("MaxHeight")?.Value);
+        Assert.Contains(
+            "RepositorySearchResults",
+            results.Attribute("ItemsSource")?.Value ?? string.Empty);
+        Assert.Contains(
+            buttons,
+            button => (button.Attribute("Command")?.Value ?? string.Empty)
+                .Contains(
+                    "AddSelectedSearchResultToContextCommand",
+                    StringComparison.Ordinal));
+    }
+
     private static XElement FindNamedElement(
         XDocument document,
         string name)

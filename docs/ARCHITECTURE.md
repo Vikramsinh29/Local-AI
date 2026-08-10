@@ -232,3 +232,16 @@ run IDs, labels, commits, schemas, and case-set identity are retained. The
 console command has no Ollama, network, repository writer, settings writer,
 project-memory writer, Git publication, or candidate-output execution path.
 `Eligible for user review` is advisory and cannot change a model or profile.
+
+## Sprint 5.1 bounded repository-search boundary
+
+Core searches only the immutable repository tree already returned by the
+bounded inspector. It compares a trimmed query with file names and relative
+paths, ranks exact and name matches before path-only matches, orders ties
+deterministically, and returns at most 50 results. Directories are not results.
+
+Desktop owns the query, visible result list, selection, and clear state. A
+repository reload clears every result. Search never reads a file or sends data
+to Ollama. Only a separate explicit action passes one selected relative path to
+the existing repository file-context service, which revalidates containment,
+links, generated/binary/secret exclusions, UTF-8, and byte budgets.

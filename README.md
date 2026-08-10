@@ -39,11 +39,14 @@ an external AI service.
 - A deterministic offline comparison of exactly two compatible evaluation
   reports, with case and metric deltas, explicit provenance and safety gates,
   a 20-percent reported-duration limit, and an advisory-only recommendation.
+- Bounded, deterministic search across already-inspected repository file names
+  and relative paths, with explicit selection before the existing protected
+  context reader can add a result to an AI prompt.
 
 The current roadmap is in [ROADMAP.md](ROADMAP.md). Phase 4 is complete at
 `2ce02a0`: deterministic candidate comparison for two compatible recorded
-evaluation reports. No implementation sprint is currently active; any optional
-Phase 5 work requires a separately defined and approved scope.
+evaluation reports. The active scope is Sprint 5.1: bounded, read-only search
+over the already-inspected repository tree.
 Local-AI does not provide an arbitrary terminal and must not restore packages,
 commit, push, or apply model output that was not separately reviewed and
 approved.

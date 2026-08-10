@@ -43,7 +43,12 @@ public sealed class MainWindowViewModel :
     private string _repositorySummary =
         "Select a repository to add project context.";
     private RepositoryTreeItemViewModel? _selectedRepositoryItem;
+    private RepositorySearchResultViewModel? _selectedRepositorySearchResult;
     private RepositoryContextFileViewModel? _selectedContextFile;
+    private IReadOnlyList<RepositoryTreeNode> _repositorySearchTree = [];
+    private string _repositorySearchQuery = string.Empty;
+    private string _repositorySearchStatus =
+        "Enter at least 2 characters to search file names and paths.";
     private VerificationToolDescriptor _selectedVerificationTool =
         VerificationTools.All[0];
     private VerificationAuditEntryViewModel?
@@ -150,6 +155,19 @@ public sealed class MainWindowViewModel :
             AddSelectedFileToContextAsync,
             CanAddSelectedFileToContext);
 
+        SearchRepositoryCommand = new RelayCommand(
+            SearchRepository,
+            CanSearchRepository);
+
+        ClearRepositorySearchCommand = new RelayCommand(
+            ClearRepositorySearch,
+            () => RepositorySearchResults.Count > 0 ||
+                  !string.IsNullOrEmpty(RepositorySearchQuery));
+
+        AddSelectedSearchResultToContextCommand = new AsyncRelayCommand(
+            AddSelectedSearchResultToContextAsync,
+            CanAddSelectedSearchResultToContext);
+
         RemoveSelectedContextFileCommand = new RelayCommand(
             RemoveSelectedContextFile,
             () => SelectedContextFile is not null && !IsBusy);
@@ -229,6 +247,9 @@ public sealed class MainWindowViewModel :
         get;
     } = [];
 
+    public ObservableCollection<RepositorySearchResultViewModel>
+        RepositorySearchResults { get; } = [];
+
     public ObservableCollection<VerificationAuditEntryViewModel>
         VerificationAuditEntries { get; } = [];
 
@@ -257,6 +278,12 @@ public sealed class MainWindowViewModel :
     public RelayCommand ToggleRepositoryPanelCommand { get; }
 
     public AsyncRelayCommand AddSelectedFileToContextCommand { get; }
+
+    public RelayCommand SearchRepositoryCommand { get; }
+
+    public RelayCommand ClearRepositorySearchCommand { get; }
+
+    public AsyncRelayCommand AddSelectedSearchResultToContextCommand { get; }
 
     public RelayCommand RemoveSelectedContextFileCommand { get; }
 
@@ -387,6 +414,38 @@ public sealed class MainWindowViewModel :
             if (SetField(ref _selectedContextFile, value))
             {
                 RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public string RepositorySearchQuery
+    {
+        get => _repositorySearchQuery;
+        set
+        {
+            if (SetField(ref _repositorySearchQuery, value))
+            {
+                SearchRepositoryCommand.NotifyCanExecuteChanged();
+                ClearRepositorySearchCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public string RepositorySearchStatus
+    {
+        get => _repositorySearchStatus;
+        private set => SetField(ref _repositorySearchStatus, value);
+    }
+
+    public RepositorySearchResultViewModel? SelectedRepositorySearchResult
+    {
+        get => _selectedRepositorySearchResult;
+        set
+        {
+            if (SetField(ref _selectedRepositorySearchResult, value))
+            {
+                AddSelectedSearchResultToContextCommand
+                    .NotifyCanExecuteChanged();
             }
         }
     }
@@ -848,6 +907,8 @@ public sealed class MainWindowViewModel :
             BrowseRepositoryCommand.NotifyCanExecuteChanged();
             RefreshRepositoryCommand.NotifyCanExecuteChanged();
             AddSelectedFileToContextCommand.NotifyCanExecuteChanged();
+            SearchRepositoryCommand.NotifyCanExecuteChanged();
+            AddSelectedSearchResultToContextCommand.NotifyCanExecuteChanged();
             RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
             SendCommand.NotifyCanExecuteChanged();
             RunVerificationCommand.NotifyCanExecuteChanged();
@@ -970,6 +1031,8 @@ public sealed class MainWindowViewModel :
                     : null;
 
             RepositoryTree.Clear();
+            _repositorySearchTree = repository.RootEntries;
+            ClearRepositorySearch();
             ClearContextFiles();
             ClearProjectInstructions();
             ClearVerificationHistory();
@@ -1011,6 +1074,8 @@ public sealed class MainWindowViewModel :
             _repositorySolutionFile = null;
 
             RepositoryTree.Clear();
+            _repositorySearchTree = [];
+            ClearRepositorySearch();
             SelectedRepositoryItem = null;
             ClearContextFiles();
             ClearProjectInstructions();
@@ -1371,10 +1436,87 @@ public sealed class MainWindowViewModel :
             return;
         }
 
+        await AddFileToContextAsync(SelectedRepositoryItem!.RelativePath);
+    }
+
+    private bool CanSearchRepository()
+    {
+        int length = RepositorySearchQuery.Trim().Length;
+        return !IsBusy &&
+               _repositorySearchTree.Count > 0 &&
+               length >= RepositoryTreeSearch.MinimumQueryLength &&
+               length <= RepositoryTreeSearch.MaximumQueryLength;
+    }
+
+    private void SearchRepository()
+    {
+        RepositorySearchResponse response = RepositoryTreeSearch.Search(
+            _repositorySearchTree,
+            RepositorySearchQuery);
+
+        RepositorySearchResults.Clear();
+        SelectedRepositorySearchResult = null;
+
+        if (!response.IsSuccess)
+        {
+            RepositorySearchStatus = response.Error!;
+            return;
+        }
+
+        foreach (RepositorySearchResult result in response.Results)
+        {
+            RepositorySearchResults.Add(
+                new RepositorySearchResultViewModel(result));
+        }
+
+        SelectedRepositorySearchResult =
+            RepositorySearchResults.FirstOrDefault();
+        RepositorySearchStatus = response.Results.Count == 0
+            ? "No matching files."
+            : response.IsTruncated
+                ? $"Showing the first {response.Results.Count} matching files."
+                : $"{response.Results.Count} matching file(s).";
+        ClearRepositorySearchCommand.NotifyCanExecuteChanged();
+    }
+
+    private void ClearRepositorySearch()
+    {
+        RepositorySearchQuery = string.Empty;
+        RepositorySearchResults.Clear();
+        SelectedRepositorySearchResult = null;
+        RepositorySearchStatus =
+            "Enter at least 2 characters to search file names and paths.";
+        ClearRepositorySearchCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanAddSelectedSearchResultToContext()
+    {
+        return !IsBusy &&
+               SelectedRepositorySearchResult is not null &&
+               Directory.Exists(RepositoryPath) &&
+               ContextFiles.All(file =>
+                   !file.RelativePath.Equals(
+                       SelectedRepositorySearchResult.RelativePath,
+                       StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task AddSelectedSearchResultToContextAsync()
+    {
+        if (!CanAddSelectedSearchResultToContext())
+        {
+            return;
+        }
+
+        await AddFileToContextAsync(
+            SelectedRepositorySearchResult!.RelativePath);
+    }
+
+    private async Task AddFileToContextAsync(string relativePath)
+    {
         RepositoryContextReadResult result =
             await _repositoryFileContextService.ReadAsync(
                 RepositoryPath,
-                SelectedRepositoryItem!.RelativePath,
+                relativePath,
                 ContextSizeBytes);
 
         if (!result.IsSuccess)
@@ -1865,6 +2007,7 @@ public sealed class MainWindowViewModel :
         OnPropertyChanged(nameof(ContextSizeText));
         OnPropertyChanged(nameof(AgentEvidenceText));
         AddSelectedFileToContextCommand.NotifyCanExecuteChanged();
+        AddSelectedSearchResultToContextCommand.NotifyCanExecuteChanged();
         RemoveSelectedContextFileCommand.NotifyCanExecuteChanged();
         SendCommand.NotifyCanExecuteChanged();
     }

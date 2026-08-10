@@ -210,3 +210,15 @@ It never runs Ollama, judges with an LLM, executes recorded output, changes a
 model/profile, promotes automatically, or writes a selected repository. Any
 quality regression, unsafe-action regression, provenance mismatch, invalid
 input, or excessive duration makes the candidate not recommended.
+
+## ADR: first repository search uses the inspected tree only
+
+**Decision:** Sprint 5.1 searches only file names and relative paths already
+present in the bounded repository tree. It returns at most 50 deterministic
+results and requires an explicit user action before the existing context reader
+may load one selected file.
+
+**Reason:** Tree-only search improves navigation without adding another
+filesystem crawler, content-reading boundary, persistent index, semantic model,
+or hidden prompt-selection channel. The existing context service remains the
+single authority for deciding whether a selected file is safe to read.
