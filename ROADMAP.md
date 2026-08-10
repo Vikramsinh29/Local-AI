@@ -2,8 +2,8 @@
 
 **Status:** Active
 **Last updated:** 2026-08-08
-**Baseline:** `8a8415c` (`main`) — Sprint 3.2 user-approved local project
-memory, 149 passing tests
+**Baseline:** `c0bb8fb` (`main`) — Sprint 3.3 explicit project-memory
+prompt inclusion, 158 passing tests
 
 ## Purpose
 
@@ -53,8 +53,10 @@ sprint small, evidence-based, and safe.
 - User-approved local project memory for bounded Architecture, Command,
   Decision, and Known issue notes, with atomic local JSON persistence and
   separate consumed approval for every create, update, or delete.
-- Project memory remains excluded from AI prompts at the current baseline.
-- 149 automated tests passing at the current baseline.
+- Explicit, session-only inclusion of at most one user-selected project-memory
+  entry, with default exclusion, full-entry revalidation, visible token cost,
+  approved prompt precedence, and deterministic evidence validation.
+- 158 automated tests passing at the current baseline.
 
 ## Roadmap
 
@@ -332,7 +334,7 @@ inclusion, semantic retrieval, embeddings, vector databases, memory import or
 export, cross-project sharing, cloud synchronization, command execution, source
 writes, commits, pushes, or unattended actions.
 
-**Sprint 3.3 — Explicit project-memory prompt inclusion — Active**
+**Sprint 3.3 — Explicit project-memory prompt inclusion — Complete (`c0bb8fb`)**
 
 **User-visible goal:** Let the user explicitly select one stored project-memory
 entry to include in AI prompts, while keeping the default at no memory and
@@ -399,7 +401,7 @@ semantic retrieval, embeddings, vector databases, model-created memory,
 summarization, prompt-driven memory changes, command execution, cross-project
 memory, cloud synchronization, import or export, source writes, commits, pushes,
 or unattended actions.
-**Phase 3 exit gate**
+**Phase 3 exit gate — Satisfied (`c0bb8fb`)**
 
 - Project memory stays local and is visibly attributable to its source.
 - A skill cannot override repository safety rules or user instructions.
@@ -453,12 +455,4 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** Sprint 3.3 — implementation in progress.
-
-Implement only explicit, session-only inclusion of at most one user-selected
-project-memory entry. Default to no memory, show the exact included entry and
-token cost, revalidate it before sending, preserve approved prompt precedence,
-and require deterministic evidence identity. Do not add automatic selection,
-multiple memories, semantic retrieval, embeddings, command execution,
-model-written memory, cross-project sharing, cloud synchronization, source
-writes, new tool permissions, or unattended behavior.
+**Status:** None.
