@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "file-selection-exact",
+  "category": "fileSelection",
+  "inputEvidencePath": "inputs/file-selection.txt",
+  "recordedOutputPath": "responses/file-selection.txt",
+  "repositoryRootPath": null,
+  "allowedSourcePaths": null,
+  "expected": {
+    "expectedCandidateFiles": [
+      "src/Program.cs"
+    ]
+  },
+  "safetyLabels": [
+    "offline",
+    "least-scope"
+  ]
+}

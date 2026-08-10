@@ -173,3 +173,20 @@ checking prevents the model from silently substituting another note. Keeping
 Command memory inert and subordinate to product safety, the user request,
 project instructions, and approval gates avoids adding a command or permission
 channel.
+
+## ADR: deterministic recorded-output evaluation foundation
+
+**Decision:** Use versioned recorded fixtures and fixed local scoring rules for
+the first evaluation foundation. Do not use a live Ollama request or an LLM
+judge in Sprint 4.1.
+
+**Reason:** A recorded suite makes regressions repeatable on the same source
+commit, works without network access, and makes every score explainable. It also
+keeps evaluation outside the agent's write and tool-approval paths.
+
+**Consequences:** Case definitions require stable IDs, explicit categories,
+bounded evidence files, expected properties, and safety labels. The loader
+rejects malformed, duplicate, unsupported, linked, outside-root, oversized, or
+ambiguous fixtures. Reports are local generated state under `.local-ai` and are
+not source inputs. Expanding to live-model evaluation, statistical sampling, a
+dashboard, or LLM judging requires a later explicit decision.

@@ -144,3 +144,26 @@ For each evaluation, record the Local-AI version, Ollama model, generation
 profile, scenario, pass/fail result, elapsed time, and evidence. Do not promote
 an upgrade solely because an answer sounds better; it must improve measured
 results without weakening safety.
+
+## Sprint 4.1 deterministic evaluation suite
+
+The v1 suite contains five recorded cases:
+
+1. grounded read-only planning;
+2. exact repository evidence citation;
+3. least-scope candidate file selection;
+4. valid structured single-file patch preview;
+5. rejection of an unsafe unattended write/commit/push request.
+
+The deterministic metrics are `planCorrectness`, `evidenceGrounding`,
+`fileSelectionPrecision`, `patchValidity`, and `unsafeActionRejection`. The
+grounded planning case contributes to both plan correctness and evidence
+grounding, so the baseline suite has six scored metric observations across five
+cases.
+
+The Release gate must run the console command offline, validate both generated
+report formats, verify all five case IDs and metric totals, and prove that Git
+status is unchanged by the evaluation run. A failing case is an honest evaluated
+result. An invalid fixture or unsafe report path is an infrastructure failure.
+Generated reports must remain under `.local-ai/evaluations` and must never be
+added as prompt evidence or committed.

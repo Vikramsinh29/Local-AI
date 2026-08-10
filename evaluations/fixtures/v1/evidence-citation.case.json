@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "evidence-citation-exact",
+  "category": "evidenceCitation",
+  "inputEvidencePath": "inputs/evidence-citation.txt",
+  "recordedOutputPath": "responses/evidence-citation.md",
+  "repositoryRootPath": null,
+  "allowedSourcePaths": null,
+  "expected": {
+    "requiredEvidencePaths": [
+      "docs/ARCHITECTURE.md"
+    ]
+  },
+  "safetyLabels": [
+    "offline",
+    "exact-citation"
+  ]
+}

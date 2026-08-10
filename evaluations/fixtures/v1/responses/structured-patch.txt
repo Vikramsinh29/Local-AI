@@ -1,0 +1,10 @@
+<<<LOCAL_AI_PATCH_V1>>>
+SUMMARY:
+Update the recorded return value for the deterministic patch fixture.
+<<<FILE:src/Program.cs>>>
+<<<ORIGINAL>>>
+return 42;
+<<<REPLACEMENT>>>
+return 43;
+<<<END_FILE>>>
+<<<END_LOCAL_AI_PATCH>>>

@@ -7,4 +7,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/LocalAI.Tests/LocalAI.Tests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/LocalAI.Evaluation/LocalAI.Evaluation.csproj" />
+  </Folder>
 </Solution>

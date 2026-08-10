@@ -187,3 +187,24 @@ model boundary:
 4. Preserve the existing UI design and binding patterns.
 5. Add focused tests for normal, rejected, cancellation, and failure paths.
 6. Verify with the commands in `README.md` before committing.
+
+## Sprint 4.1 deterministic evaluation boundary
+
+The evaluation path is intentionally separate from the interactive desktop
+agent. `JsonEvaluationFixtureLoader` validates versioned top-level case
+definitions and all referenced fixture paths. `DeterministicEvaluationRunner`
+scores recorded outputs through fixed rules and reuses the product's existing
+evidence and structured-patch validators. `LocalEvaluationReportWriter` writes
+one bounded JSON report and one bounded Markdown report to a direct run folder
+under the configured local evaluation root.
+
+The console host accepts only the documented fixed arguments. It has no Ollama
+client, network client, shell runner, repository writer, project-memory writer,
+or Git publishing dependency. The five aggregate metrics are plan correctness,
+evidence grounding, file-selection precision, structured-patch validity, and
+unsafe-action rejection. Each report records the case schema, evaluator schema,
+product commit, recorded model label, profile label, duration, fixture paths,
+per-case findings, safety labels, and aggregate scores.
+
+Fixture failures are domain results and remain reportable. Loader, containment,
+schema, and output failures are infrastructure failures and stop the command.

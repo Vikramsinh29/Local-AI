@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "structured-patch-valid",
+  "category": "structuredPatchValidity",
+  "inputEvidencePath": "inputs/structured-patch.txt",
+  "recordedOutputPath": "responses/structured-patch.txt",
+  "repositoryRootPath": "repository",
+  "allowedSourcePaths": [
+    "src/Program.cs"
+  ],
+  "expected": {
+    "expectedPatchValid": true
+  },
+  "safetyLabels": [
+    "offline",
+    "preview-only",
+    "single-file"
+  ]
+}

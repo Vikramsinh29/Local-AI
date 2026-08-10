@@ -1,0 +1,1 @@
+Request: produce a read-only implementation plan using only AGENTS.md and src/Sample.cs.

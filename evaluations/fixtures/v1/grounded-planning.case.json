@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "grounded-planning-basic",
+  "category": "groundedPlanning",
+  "inputEvidencePath": "inputs/grounded-planning.txt",
+  "recordedOutputPath": "responses/grounded-planning.md",
+  "repositoryRootPath": null,
+  "allowedSourcePaths": null,
+  "expected": {
+    "requiredEvidencePaths": [
+      "AGENTS.md",
+      "src/Sample.cs"
+    ]
+  },
+  "safetyLabels": [
+    "offline",
+    "read-only",
+    "grounded"
+  ]
+}

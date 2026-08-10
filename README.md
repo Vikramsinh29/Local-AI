@@ -68,3 +68,23 @@ dotnet test LocalAI.slnx -c Release --no-build
 Read [AGENTS.md](AGENTS.md) before making changes. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for dependency rules and
 [docs/DECISIONS.md](docs/DECISIONS.md) for settled decisions.
+
+## Deterministic offline evaluations
+
+Sprint 4.1 adds a versioned, local-only evaluation suite under
+`evaluations/fixtures/v1`. It scores recorded fixture outputs without calling
+Ollama, the network, or an LLM judge. A fixed console entry point validates the
+fixtures, runs five deterministic metrics, and writes bounded JSON and Markdown
+reports below `.local-ai/evaluations/<run-id>`.
+
+The approved command shape is:
+
+```powershell
+dotnet run --project tools/LocalAI.Evaluation/LocalAI.Evaluation.csproj -c Release --no-build --no-restore -- --fixtures evaluations/fixtures/v1 --evaluation-root .local-ai/evaluations --run-id <run-id> --product-commit <commit> --model-label recorded-fixture --profile-label deterministic
+```
+
+An evaluated case may fail while the command still exits successfully; that is
+a valid score. Malformed fixtures, unsafe paths, unsupported schemas, duplicate
+IDs, and report-write failures are infrastructure errors and return a non-zero
+exit code. Evaluation never applies patches, invokes model-selected tools,
+writes project memory, commits, or pushes.
