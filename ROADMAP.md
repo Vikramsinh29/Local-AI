@@ -1,7 +1,7 @@
 # Local-AI Roadmap
 
 **Status:** Active
-**Last updated:** 2026-08-08
+**Last updated:** 2026-08-10
 **Baseline:** `c0bb8fb` (`main`) — Sprint 3.3 explicit project-memory
 prompt inclusion, 158 passing tests
 
@@ -417,6 +417,71 @@ or unattended actions.
 - Promote a model/profile only when it improves measured results without
   regressing safety or latency beyond agreed limits.
 
+**Sprint 4.1 — Deterministic local evaluation suite foundation — Active**
+
+**User-visible goal:** Run the same bounded, offline evaluation cases against
+recorded Local-AI outputs and receive an honest, reproducible report showing
+what passed, what failed, and which evidence produced each score.
+
+**In scope:**
+
+- Define a versioned local evaluation-case format with stable identifiers,
+  capability category, input evidence, expected properties, and safety labels.
+- Start with a small representative fixture set covering grounded planning,
+  exact evidence citation, source-file selection, structured patch validity,
+  and unsafe-tool or unsupported-write rejection.
+- Score recorded candidate responses only through deterministic Local-AI
+  validators and explicit expected properties; do not use an LLM as a judge.
+- Report per-case pass/fail results plus aggregate counts for plan correctness,
+  evidence grounding, file-selection precision, patch validity, and unsafe
+  action rejection.
+- Preserve case, evaluator-schema, product-commit, model-label, profile-label,
+  duration, and scoring provenance in every report.
+- Write bounded JSON and Markdown reports under ignored
+  `.local-ai/evaluations/<run-id>/` state and never add reports to AI context.
+- Reject malformed, duplicate, unsupported-schema, linked, outside-root,
+  oversized, or ambiguous evaluation inputs honestly.
+- Guarantee that running an evaluation cannot edit selected source files,
+  execute model-proposed tools, apply patches, create memory, commit, or push.
+
+**Expected implementation scope:**
+
+- Core evaluation case, result, metric, and report models with deterministic
+  scoring services.
+- One local fixture loader and one bounded report writer.
+- A fixed local evaluation command or entry point with clear console output;
+  no dashboard is required in this sprint.
+- A small synthetic fixture repository and focused evaluator tests.
+- Relevant README, architecture, decision, evaluation, and roadmap updates.
+
+**Safety boundaries:**
+
+- Evaluation is offline and read-only with respect to every selected repository.
+- Recorded model output is untrusted test data and can never become a tool call,
+  approval, patch apply, memory mutation, or instruction override.
+- Never read credentials, environment values, unrelated user files, or network
+  resources while loading a case.
+- Never silently repair a malformed case, expected result, or candidate output.
+- Never claim a metric passed when its case was skipped, invalid, or unscored.
+
+**Acceptance criteria:**
+
+- The same cases and candidate outputs produce byte-stable scoring data apart
+  from declared run metadata such as timestamp and duration.
+- Tests cover every metric, mixed pass/fail reports, malformed and duplicate
+  cases, schema rejection, containment, size budgets, and unsafe-output handling.
+- A failing case keeps the run successful as an evaluation operation while the
+  report clearly records the failed score; infrastructure errors fail the run.
+- A manual run proves per-case provenance, aggregate metrics, bounded local
+  reports, unchanged source files, and unchanged Git status.
+- Release build, all existing and new tests, `git diff --check`, and final-diff
+  review must pass.
+
+**Out of scope:** live Ollama inference, model or profile comparison, automatic
+model promotion, subjective LLM judging, semantic similarity, embeddings,
+performance benchmarking, UI dashboards, cloud telemetry, network access,
+repository writes, patch apply, memory changes, commits, pushes, or unattended
+execution.
 **Phase 4 exit gate**
 
 - Every future upgrade has a before/after evaluation report.
@@ -455,4 +520,12 @@ Every sprint must define:
 
 ## Current Active Sprint
 
-**Status:** None.
+**Status:** Sprint 4.1 — roadmap active; implementation approved but not
+started.
+
+Implement only the deterministic local evaluation-suite foundation described
+above. Use versioned synthetic cases, recorded candidate outputs, existing
+deterministic validators, bounded ignored local reports, and explicit scoring
+provenance. Do not add live model inference, LLM judging, model comparison,
+automatic promotion, dashboards, telemetry, network access, new tool powers,
+repository writes, memory mutation, commits, pushes, or unattended execution.
